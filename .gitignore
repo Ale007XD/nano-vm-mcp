@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.env
+*.db
+*.db-wal
+*.db-shm
+nano_vm_mcp/_version.py
