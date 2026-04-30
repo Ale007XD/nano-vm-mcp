@@ -1,0 +1,16 @@
+README.md
+pyproject.toml
+nano_vm_mcp/__init__.py
+nano_vm_mcp/_version.py
+nano_vm_mcp/cli.py
+nano_vm_mcp/server.py
+nano_vm_mcp/store.py
+nano_vm_mcp/tools.py
+nano_vm_mcp.egg-info/PKG-INFO
+nano_vm_mcp.egg-info/SOURCES.txt
+nano_vm_mcp.egg-info/dependency_links.txt
+nano_vm_mcp.egg-info/entry_points.txt
+nano_vm_mcp.egg-info/requires.txt
+nano_vm_mcp.egg-info/top_level.txt
+tests/test_store.py
+tests/test_tools.py
