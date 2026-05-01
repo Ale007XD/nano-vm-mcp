@@ -21,6 +21,26 @@ from . import tools as _tools
 _DB_PATH = os.getenv("NANO_VM_MCP_DB", "nano_vm_mcp.db")
 
 _store = ProgramStore(_DB_PATH)
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    """Reject SSE requests without a valid Bearer token when API key is configured."""
+
+    async def dispatch(self, request: Any, call_next: Any) -> Any:
+        api_key = os.getenv("NANO_VM_MCP_API_KEY", "")
+        if not api_key:
+            return await call_next(request)
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer ") or not secrets.compare_digest(
+            auth[len("Bearer "):].strip(), api_key
+        ):
+            return Response(
+                content='{"error": "Unauthorized"}',
+                status_code=401,
+                media_type="application/json",
+            )
+        return await call_next(request)
+
+
 app = Server("nano-vm-mcp")
 
 
@@ -160,26 +180,6 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.routing import Route, Mount
     from starlette.responses import Response
-
-    _API_KEY = os.getenv("NANO_VM_MCP_API_KEY", "")
-
-    class BearerAuthMiddleware(BaseHTTPMiddleware):
-        """Reject requests without a valid Bearer token when API key is configured."""
-
-        async def dispatch(self, request: Any, call_next: Any) -> Any:
-            if not _API_KEY:
-                # No key configured — warn once at startup, allow all (dev mode)
-                return await call_next(request)
-            auth = request.headers.get("Authorization", "")
-            if not auth.startswith("Bearer ") or not secrets.compare_digest(
-                auth[len("Bearer ") :].strip(), _API_KEY
-            ):
-                return Response(
-                    content='{"error": "Unauthorized"}',
-                    status_code=401,
-                    media_type="application/json",
-                )
-            return await call_next(request)
 
     sse = SseServerTransport("/messages")
 
