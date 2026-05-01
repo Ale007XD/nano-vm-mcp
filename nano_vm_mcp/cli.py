@@ -1,9 +1,9 @@
 """nano_vm_mcp.cli — CLI entry point for nano-vm-mcp."""
-
 from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 
@@ -46,7 +46,6 @@ def main() -> None:
     env_path = Path(args.env_file)
     if env_path.exists():
         from dotenv import load_dotenv
-
         load_dotenv(env_path)
 
     os.environ.setdefault("NANO_VM_MCP_DB", args.db)
@@ -56,6 +55,18 @@ def main() -> None:
     if args.transport == "stdio":
         run_stdio()
     else:
+        _api_key = os.getenv("NANO_VM_MCP_API_KEY", "")
+        if not _api_key:
+            print(
+                "\n"
+                "  ⚠️  WARNING: NANO_VM_MCP_API_KEY is not set.\n"
+                "     The SSE endpoint has NO authentication.\n"
+                "     Anyone who knows the URL can call run_program on this server.\n"
+                "\n"
+                "     Set NANO_VM_MCP_API_KEY in your .env or environment before\n"
+                "     exposing this server outside localhost or a trusted network.\n",
+                file=sys.stderr,
+            )
         run_sse(host=args.host, port=args.port)
 
 
