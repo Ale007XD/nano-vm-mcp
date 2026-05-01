@@ -153,6 +153,6 @@ Auth middleware is on the roadmap for v0.2.0.
 - [x] `run_program`, `get_trace`, `list_programs`, `get_program`, `delete_program` (v0.1.0)
 - [x] stdio + SSE transports
 - [x] SQLite WAL persistence
+- [x] Auth middleware for SSE — NANO_VM_MCP_API_KEY bearer token, timing-safe (v0.2.0)
 - [ ] `plan_and_run` — intent string → Planner → run (P7)
-- [ ] Auth middleware for SSE (API key header)
 - [ ] Docker image to GHCR
