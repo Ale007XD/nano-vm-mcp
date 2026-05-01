@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from typing import Any
 
 from mcp.server import Server
@@ -151,7 +152,30 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
     import uvicorn
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
+    from starlette.middleware import Middleware
+    from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.routing import Route, Mount
+    from starlette.responses import Response
+
+    _API_KEY = os.getenv("NANO_VM_MCP_API_KEY", "")
+
+    class BearerAuthMiddleware(BaseHTTPMiddleware):
+        """Reject requests without a valid Bearer token when API key is configured."""
+
+        async def dispatch(self, request: Any, call_next: Any) -> Any:
+            if not _API_KEY:
+                # No key configured — warn once at startup, allow all (dev mode)
+                return await call_next(request)
+            auth = request.headers.get("Authorization", "")
+            if not auth.startswith("Bearer ") or not secrets.compare_digest(
+                auth[len("Bearer "):].strip(), _API_KEY
+            ):
+                return Response(
+                    content='{"error": "Unauthorized"}',
+                    status_code=401,
+                    media_type="application/json",
+                )
+            return await call_next(request)
 
     sse = SseServerTransport("/messages")
 
@@ -174,6 +198,8 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
         routes=[
             Route("/sse", endpoint=handle_sse),
             Mount("/messages", app=sse.handle_post_message),
-        ]
+        ],
+        middleware=[Middleware(BearerAuthMiddleware)],
     )
     uvicorn.run(starlette_app, host=host, port=port)
+    
