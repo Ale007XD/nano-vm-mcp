@@ -1,6 +1,5 @@
 """nano_vm_mcp.server — MCP server with stdio and SSE transports."""
 
-from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
@@ -22,6 +21,7 @@ _DB_PATH = os.getenv("NANO_VM_MCP_DB", "nano_vm_mcp.db")
 
 _store = ProgramStore(_DB_PATH)
 
+
 class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Reject SSE requests without a valid Bearer token when API key is configured."""
 
@@ -31,7 +31,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer ") or not secrets.compare_digest(
-            auth[len("Bearer "):].strip(), api_key
+            auth[len("Bearer ") :].strip(), api_key
         ):
             return Response(
                 content='{"error": "Unauthorized"}',
@@ -177,9 +177,7 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
-    from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.routing import Route, Mount
-    from starlette.responses import Response
 
     sse = SseServerTransport("/messages")
 

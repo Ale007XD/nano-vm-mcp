@@ -2,8 +2,7 @@
 """Tests for SSE bearer auth middleware."""
 
 import os
-import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 from starlette.testclient import TestClient
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
@@ -15,6 +14,7 @@ from nano_vm_mcp.server import BearerAuthMiddleware
 
 def _make_app(api_key: str) -> Starlette:
     """Build minimal Starlette app with BearerAuthMiddleware."""
+
     async def homepage(request):
         return JSONResponse({"ok": True})
 
