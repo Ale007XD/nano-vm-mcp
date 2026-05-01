@@ -1,18 +1,51 @@
 """nano_vm_mcp.tools — MCP tool implementations."""
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any
 
 from nano_vm import ExecutionVM, Program
+from nano_vm.adapters import LiteLLMAdapter, MockLLMAdapter
 from pydantic import ValidationError
 
 from .store import ProgramStore
 
 
-def _vm() -> ExecutionVM:
-    """Return a fresh VM instance (stateless per call)."""
-    return ExecutionVM()
+def _has_llm_steps(program_data: dict[str, Any]) -> bool:
+    """Return True if any step (including parallel sub-steps) requires an LLM."""
+    def _scan(steps: list[dict]) -> bool:
+        for step in steps:
+            if step.get("type") == "llm":
+                return True
+            if step.get("type") == "parallel":
+                if _scan(step.get("parallel_steps", [])):
+                    return True
+        return False
+    return _scan(program_data.get("steps", []))
+
+
+def _build_vm(program_data: dict[str, Any]) -> ExecutionVM | str:
+    """
+    Build ExecutionVM with the appropriate LLM adapter.
+
+    - tool/condition/parallel-only programs: MockLLMAdapter("noop") — no API key needed.
+    - programs with llm steps: LiteLLMAdapter from NANO_VM_MCP_LLM_MODEL env var.
+
+    Returns ExecutionVM on success, or a str error message if llm steps are present
+    but NANO_VM_MCP_LLM_MODEL is not configured.
+    """
+    if not _has_llm_steps(program_data):
+        return ExecutionVM(llm=MockLLMAdapter("noop"))
+
+    model = os.getenv("NANO_VM_MCP_LLM_MODEL", "")
+    if not model:
+        return (
+            "Program contains llm steps but NANO_VM_MCP_LLM_MODEL is not set. "
+            "Set NANO_VM_MCP_LLM_MODEL (e.g. 'openrouter/llama-3.3-70b-instruct:free') "
+            "and the corresponding API key in your environment."
+        )
+    return ExecutionVM(llm=LiteLLMAdapter(model))
 
 
 async def run_program(
@@ -44,18 +77,27 @@ async def run_program(
     if save_as:
         store.save_program(program_id, save_as, program_data)
 
-    vm = _vm()
-    trace = await vm.run(program)
+    vm_or_err = _build_vm(program_data)
+    if isinstance(vm_or_err, str):
+        return {"error": vm_or_err}
+    trace = await vm_or_err.run(program)
 
     trace_id = str(uuid.uuid4())
     trace_dict = trace.model_dump(mode="json") if hasattr(trace, "model_dump") else vars(trace)
+    # Compute cost in a backward-compatible way
+    if hasattr(trace, "total_cost_usd"):
+        cost = trace.total_cost_usd() or 0.0
+    elif hasattr(trace, "total_cost"):
+        cost = float(trace.total_cost) or 0.0
+    else:
+        cost = 0.0
 
     store.save_trace(
         trace_id=trace_id,
         program_id=program_id,
         status=str(trace.status),
         steps_count=len(trace.steps) if hasattr(trace, "steps") else 0,
-        total_cost=float(trace.total_cost) if hasattr(trace, "total_cost") else 0.0,
+        total_cost=cost,
         trace=trace_dict,
     )
 
@@ -64,7 +106,7 @@ async def run_program(
         "program_id": program_id,
         "status": str(trace.status),
         "steps": len(trace.steps) if hasattr(trace, "steps") else 0,
-        "cost": float(trace.total_cost) if hasattr(trace, "total_cost") else 0.0,
+        "cost": cost,
         "error": None,
     }
 
