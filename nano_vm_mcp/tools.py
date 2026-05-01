@@ -1,5 +1,4 @@
 """nano_vm_mcp.tools — MCP tool implementations."""
-
 from __future__ import annotations
 
 import os
@@ -7,7 +6,7 @@ import uuid
 from typing import Any
 
 from nano_vm import ExecutionVM, Program
-from nano_vm.adapters import LiteLLMAdapter, MockLLMAdapter
+from nano_vm.adapters import MockLLMAdapter
 from pydantic import ValidationError
 
 from .store import ProgramStore
@@ -15,7 +14,6 @@ from .store import ProgramStore
 
 def _has_llm_steps(program_data: dict[str, Any]) -> bool:
     """Return True if any step (including parallel sub-steps) requires an LLM."""
-
     def _scan(steps: list[dict]) -> bool:
         for step in steps:
             if step.get("type") == "llm":
@@ -24,7 +22,6 @@ def _has_llm_steps(program_data: dict[str, Any]) -> bool:
                 if _scan(step.get("parallel_steps", [])):
                     return True
         return False
-
     return _scan(program_data.get("steps", []))
 
 
@@ -47,6 +44,13 @@ def _build_vm(program_data: dict[str, Any]) -> ExecutionVM | str:
             "Program contains llm steps but NANO_VM_MCP_LLM_MODEL is not set. "
             "Set NANO_VM_MCP_LLM_MODEL (e.g. 'openrouter/llama-3.3-70b-instruct:free') "
             "and the corresponding API key in your environment."
+        )
+    try:
+        from nano_vm.adapters import LiteLLMAdapter
+    except ImportError:
+        return (
+            "LiteLLMAdapter is not available. "
+            "Install it with: pip install 'llm-nano-vm[litellm]'"
         )
     return ExecutionVM(llm=LiteLLMAdapter(model))
 
