@@ -30,7 +30,7 @@ async def test_run_program_saves_trace(store):
     fake_trace = MagicMock()
     fake_trace.status = "COMPLETED"
     fake_trace.steps = []
-    fake_trace.total_cost = 0.0
+    fake_trace.total_cost_usd = MagicMock(return_value=0.0)
     fake_trace.model_dump = MagicMock(return_value={"status": "COMPLETED", "steps": []})
 
     minimal_program = {"steps": [{"id": "s1", "type": "tool", "tool": "noop"}]}
