@@ -1,4 +1,5 @@
 """nano_vm_mcp.cli — CLI entry point for nano-vm-mcp."""
+
 from __future__ import annotations
 
 import argparse
@@ -45,6 +46,7 @@ def main() -> None:
     env_path = Path(args.env_file)
     if env_path.exists():
         from dotenv import load_dotenv
+
         load_dotenv(env_path)
 
     os.environ.setdefault("NANO_VM_MCP_DB", args.db)

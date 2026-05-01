@@ -1,4 +1,5 @@
 """nano_vm_mcp.store — SQLite WAL persistence for Programs and Traces."""
+
 from __future__ import annotations
 
 import json
@@ -113,8 +114,6 @@ class ProgramStore:
 
     def get_trace(self, trace_id: str) -> dict[str, Any] | None:
         con = _conn(self._db)
-        row = con.execute(
-            "SELECT trace_json FROM traces WHERE id = ?", (trace_id,)
-        ).fetchone()
+        row = con.execute("SELECT trace_json FROM traces WHERE id = ?", (trace_id,)).fetchone()
         con.close()
         return json.loads(row["trace_json"]) if row else None

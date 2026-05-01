@@ -1,4 +1,5 @@
 """Tests for MCP tool handlers (mock VM)."""
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,6 +15,7 @@ def store(tmp_path):
 # ---------------------------------------------------------------------------
 # run_program
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_run_program_invalid_schema(store):
@@ -31,11 +33,7 @@ async def test_run_program_saves_trace(store):
     fake_trace.total_cost = 0.0
     fake_trace.model_dump = MagicMock(return_value={"status": "COMPLETED", "steps": []})
 
-    minimal_program = {
-        "steps": [
-            {"id": "s1", "type": "tool", "tool": "noop"}
-        ]
-    }
+    minimal_program = {"steps": [{"id": "s1", "type": "tool", "tool": "noop"}]}
 
     with patch("nano_vm_mcp.tools.ExecutionVM") as MockVM:
         instance = MockVM.return_value
@@ -53,6 +51,7 @@ async def test_run_program_saves_trace(store):
 # ---------------------------------------------------------------------------
 # get_trace
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_trace_found(store):
@@ -72,6 +71,7 @@ async def test_get_trace_not_found(store):
 # list_programs
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_list_programs_empty(store):
     result = await tools.list_programs(store)
@@ -90,6 +90,7 @@ async def test_list_programs_returns_items(store):
 # get_program
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_program_found(store):
     store.save_program("p1", "prog", {"steps": [{"id": "s1"}]})
@@ -106,6 +107,7 @@ async def test_get_program_not_found(store):
 # ---------------------------------------------------------------------------
 # delete_program
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_delete_program_ok(store):

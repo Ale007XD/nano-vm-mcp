@@ -1,4 +1,5 @@
 """nano_vm_mcp.tools — MCP tool implementations."""
+
 from __future__ import annotations
 
 import os
@@ -14,6 +15,7 @@ from .store import ProgramStore
 
 def _has_llm_steps(program_data: dict[str, Any]) -> bool:
     """Return True if any step (including parallel sub-steps) requires an LLM."""
+
     def _scan(steps: list[dict]) -> bool:
         for step in steps:
             if step.get("type") == "llm":
@@ -22,6 +24,7 @@ def _has_llm_steps(program_data: dict[str, Any]) -> bool:
                 if _scan(step.get("parallel_steps", [])):
                     return True
         return False
+
     return _scan(program_data.get("steps", []))
 
 

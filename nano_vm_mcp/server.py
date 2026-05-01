@@ -1,4 +1,5 @@
 """nano_vm_mcp.server — MCP server with stdio and SSE transports."""
+
 from __future__ import annotations
 
 import json
@@ -21,6 +22,7 @@ app = Server("nano-vm-mcp")
 # ---------------------------------------------------------------------------
 # Tool registry
 # ---------------------------------------------------------------------------
+
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
@@ -93,6 +95,7 @@ async def list_tools() -> list[Tool]:
 # Tool dispatch
 # ---------------------------------------------------------------------------
 
+
 @app.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     if name == "run_program":
@@ -119,6 +122,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 # Transport helpers
 # ---------------------------------------------------------------------------
 
+
 def run_stdio() -> None:
     """Start server in stdio mode (Claude Desktop / local MCP client)."""
     import asyncio
@@ -126,14 +130,18 @@ def run_stdio() -> None:
 
     async def _main() -> None:
         async with stdio_server() as (r, w):
-            await app.run(r, w, InitializationOptions(
-                server_name="nano-vm-mcp",
-                server_version="0.1.0",
-                capabilities=app.get_capabilities(
-                    notification_options=None,
-                    experimental_capabilities={},
+            await app.run(
+                r,
+                w,
+                InitializationOptions(
+                    server_name="nano-vm-mcp",
+                    server_version="0.1.0",
+                    capabilities=app.get_capabilities(
+                        notification_options=None,
+                        experimental_capabilities={},
+                    ),
                 ),
-            ))
+            )
 
     asyncio.run(_main())
 
@@ -148,17 +156,19 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
     sse = SseServerTransport("/messages")
 
     async def handle_sse(request: Any) -> Any:
-        async with sse.connect_sse(
-            request.scope, request.receive, request._send
-        ) as (r, w):
-            await app.run(r, w, InitializationOptions(
-                server_name="nano-vm-mcp",
-                server_version="0.1.0",
-                capabilities=app.get_capabilities(
-                    notification_options=None,
-                    experimental_capabilities={},
+        async with sse.connect_sse(request.scope, request.receive, request._send) as (r, w):
+            await app.run(
+                r,
+                w,
+                InitializationOptions(
+                    server_name="nano-vm-mcp",
+                    server_version="0.1.0",
+                    capabilities=app.get_capabilities(
+                        notification_options=None,
+                        experimental_capabilities={},
+                    ),
                 ),
-            ))
+            )
 
     starlette_app = Starlette(
         routes=[

@@ -1,4 +1,5 @@
 """Tests for ProgramStore (SQLite WAL)."""
+
 import pytest
 from nano_vm_mcp.store import ProgramStore
 

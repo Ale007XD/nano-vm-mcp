@@ -1,4 +1,5 @@
 """nano_vm_mcp — MCP server for llm-nano-vm."""
+
 try:
     from ._version import version as __version__
 except ImportError:
