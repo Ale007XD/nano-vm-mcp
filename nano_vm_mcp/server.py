@@ -168,7 +168,7 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
                 return await call_next(request)
             auth = request.headers.get("Authorization", "")
             if not auth.startswith("Bearer ") or not secrets.compare_digest(
-                auth[len("Bearer "):].strip(), _API_KEY
+                auth[len("Bearer ") :].strip(), _API_KEY
             ):
                 return Response(
                     content='{"error": "Unauthorized"}',
@@ -202,4 +202,3 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
         middleware=[Middleware(BearerAuthMiddleware)],
     )
     uvicorn.run(starlette_app, host=host, port=port)
-    
