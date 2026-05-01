@@ -1,5 +1,9 @@
 """nano_vm_mcp.server — MCP server with stdio and SSE transports."""
 
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
 from __future__ import annotations
 
 import json
