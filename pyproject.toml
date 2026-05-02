@@ -1,41 +1,66 @@
 [build-system]
-requires = ["setuptools>=68", "setuptools-scm>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "nano-vm-mcp"
 dynamic = ["version"]
 description = "MCP server for llm-nano-vm — run deterministic LLM programs via Model Context Protocol"
+authors = [
+    {name = "Ale007XD", email = "alex.deloverov@gmail.com"}
+]
 readme = "README.md"
-license = { text = "MIT" }
 requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["llm", "agent", "mcp", "deterministic", "ai", "model-context-protocol"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
 dependencies = [
     "llm-nano-vm>=0.5.0",
     "mcp>=1.0.0",
+    "starlette>=0.37.0",
     "uvicorn>=0.29.0",
     "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.4"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "httpx>=0.27",
+]
 
 [project.scripts]
 nano-vm-mcp = "nano_vm_mcp.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["nano_vm_mcp*"]
+[project.urls]
+Repository = "https://github.com/Ale007XD/nano-vm-mcp"
+Homepage   = "https://github.com/Ale007XD/nano-vm-mcp"
+Issues     = "https://github.com/Ale007XD/nano-vm-mcp/issues"
 
-[tool.setuptools_scm]
-write_to = "nano_vm_mcp/_version.py"
-fallback_version = "0.1.0.dev0"
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["nano_vm_mcp"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["."]
+pythonpath   = ["."]
 
 [tool.ruff]
-line-length = 100
+line-length    = 100
+target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E501", "E402", "E741", "F401", "F841"]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["nano_vm_mcp"]
