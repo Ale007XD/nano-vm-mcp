@@ -34,7 +34,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer ") or not secrets.compare_digest(
-            auth[len("Bearer "):].strip(), api_key
+            auth[len("Bearer ") :].strip(), api_key
         ):
             logger.warning(
                 "auth_failed method=%s path=%s client=%s",
