@@ -127,7 +127,9 @@ class UnknownToolHandler(ToolHandler):
 def build_chain() -> ToolHandler:
     """Construct and return the head of the tool-dispatch chain."""
     head = RunProgramHandler()
-    head.set_successor(GetTraceHandler()).set_successor(ListProgramsHandler()).set_successor(
-        GetProgramHandler()
-    ).set_successor(DeleteProgramHandler()).set_successor(UnknownToolHandler())
+    head.set_successor(GetTraceHandler()) \
+        .set_successor(ListProgramsHandler()) \
+        .set_successor(GetProgramHandler()) \
+        .set_successor(DeleteProgramHandler()) \
+        .set_successor(UnknownToolHandler())
     return head
