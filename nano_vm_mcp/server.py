@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from typing import Any
@@ -10,10 +11,13 @@ from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.types import TextContent, Tool
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from .handlers import build_chain
 from .store import ProgramStore
+
+logger = logging.getLogger(__name__)
 
 _DB_PATH = os.getenv("NANO_VM_MCP_DB", "nano_vm_mcp.db")
 
@@ -24,7 +28,7 @@ _chain = build_chain()
 class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Reject SSE requests without a valid Bearer token when API key is configured."""
 
-    async def dispatch(self, request: Any, call_next: Any) -> Any:
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
         api_key = os.getenv("NANO_VM_MCP_API_KEY", "")
         if not api_key:
             return await call_next(request)
@@ -32,6 +36,12 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         if not auth.startswith("Bearer ") or not secrets.compare_digest(
             auth[len("Bearer "):].strip(), api_key
         ):
+            logger.warning(
+                "auth_failed method=%s path=%s client=%s",
+                request.method,
+                request.url.path,
+                request.client.host if request.client else "unknown",
+            )
             return Response(
                 content='{"error": "Unauthorized"}',
                 status_code=401,
@@ -164,7 +174,7 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
 
     sse = SseServerTransport("/messages")
 
-    async def handle_sse(request: Any) -> Any:
+    async def handle_sse(request: Request) -> Any:
         async with sse.connect_sse(request.scope, request.receive, request._send) as (r, w):
             await app.run(
                 r,
@@ -179,8 +189,12 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
                 ),
             )
 
+    async def health(request: Request) -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
     starlette_app = Starlette(
         routes=[
+            Route("/health", endpoint=health),
             Route("/sse", endpoint=handle_sse),
             Mount("/messages", app=sse.handle_post_message),
         ],
