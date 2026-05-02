@@ -15,7 +15,11 @@ import pytest
 from nano_vm_mcp.store import ProgramStore
 from nano_vm_mcp.tools import run_program
 
-MINIMAL_PROGRAM = {"steps": [{"id": "s1", "type": "tool", "tool": "noop"}]}
+# Добавим явный id для тестов целостности БД
+MINIMAL_PROGRAM = {
+    "id": "test-program-uuid",
+    "steps": [{"id": "s1", "type": "tool", "tool": "noop"}]
+}
 
 
 @pytest.fixture
@@ -85,17 +89,22 @@ async def test_run_program_vm_exception_is_logged(store, caplog):
 
 
 # ---------------------------------------------------------------------------
-# Успешный сценарий не затронут
+# Успешный сценарий — Исправлен IntegrityError
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_run_program_success_no_error_key(store):
-    """Успешный запуск: error=None, trace_id присутствует."""
+    """Успешный запуск: требует наличия программы в БД из-за FK constraint."""
+    # FIX: Сохраняем программу перед запуском, чтобы save_trace не падал
+    program_id = MINIMAL_PROGRAM["id"]
+    store.save_program(program_id, MINIMAL_PROGRAM)
+
     fake_trace = MagicMock()
     fake_trace.status = "COMPLETED"
     fake_trace.steps = []
-    fake_trace.total_cost_usd = MagicMock(return_value=0.0)
+    # Объекты Money/Decimal часто используются для стоимости, имитируем float
+    fake_trace.total_cost_usd = 0.0 
     fake_trace.model_dump = MagicMock(return_value={"status": "COMPLETED", "steps": []})
 
     with patch("nano_vm_mcp.tools.ExecutionVM") as MockVM:
@@ -104,5 +113,10 @@ async def test_run_program_success_no_error_key(store):
 
         result = await run_program(store, MINIMAL_PROGRAM)
 
-    assert result["error"] is None
+    assert result.get("error") is None
     assert "trace_id" in result
+    
+    # Дополнительная проверка: убедимся, что трейс действительно в базе
+    db_trace = store.get_trace(result["trace_id"])
+    assert db_trace is not None
+    assert db_trace["status"] == "COMPLETED"
