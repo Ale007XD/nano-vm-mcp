@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import secrets
 from typing import Any
@@ -14,12 +13,13 @@ from mcp.types import TextContent, Tool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from . import tools as _tools
+from .handlers import build_chain
 from .store import ProgramStore
 
 _DB_PATH = os.getenv("NANO_VM_MCP_DB", "nano_vm_mcp.db")
 
 _store = ProgramStore(_DB_PATH)
+_chain = build_chain()
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
@@ -31,7 +31,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer ") or not secrets.compare_digest(
-            auth[len("Bearer ") :].strip(), api_key
+            auth[len("Bearer "):].strip(), api_key
         ):
             return Response(
                 content='{"error": "Unauthorized"}',
@@ -117,30 +117,13 @@ async def list_tools() -> list[Tool]:
 
 
 # ---------------------------------------------------------------------------
-# Tool dispatch
+# Tool dispatch — Chain of Responsibility (no if/else)
 # ---------------------------------------------------------------------------
 
 
 @app.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    if name == "run_program":
-        result = await _tools.run_program(
-            _store,
-            arguments["program"],
-            arguments.get("save_as", ""),
-        )
-    elif name == "get_trace":
-        result = await _tools.get_trace(_store, arguments["trace_id"])
-    elif name == "list_programs":
-        result = await _tools.list_programs(_store)
-    elif name == "get_program":
-        result = await _tools.get_program(_store, arguments["program_id"])
-    elif name == "delete_program":
-        result = await _tools.delete_program(_store, arguments["program_id"])
-    else:
-        result = {"error": f"Unknown tool: {name}"}
-
-    return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+    return await _chain.handle(name, arguments, _store)
 
 
 # ---------------------------------------------------------------------------
