@@ -98,7 +98,7 @@ async def test_run_program_success_no_error_key(store):
     """Успешный запуск: требует наличия программы в БД из-за FK constraint."""
     # FIX: Сохраняем программу перед запуском, чтобы save_trace не падал
     program_id = MINIMAL_PROGRAM["id"]
-    store.save_program(program_id, MINIMAL_PROGRAM)
+    store.save_program(program_id, MINIMAL_PROGRAM.get("name", ""), MINIMAL_PROGRAM)
 
     fake_trace = MagicMock()
     fake_trace.status = "COMPLETED"
