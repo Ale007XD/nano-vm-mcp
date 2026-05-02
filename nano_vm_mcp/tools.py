@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from typing import Any
@@ -11,6 +12,8 @@ from nano_vm.adapters import MockLLMAdapter
 from pydantic import ValidationError
 
 from .store import ProgramStore
+
+logger = logging.getLogger(__name__)
 
 
 def _has_llm_steps(program_data: dict[str, Any]) -> bool:
@@ -89,7 +92,12 @@ async def run_program(
     vm_or_err = _build_vm(program_data)
     if isinstance(vm_or_err, str):
         return {"error": vm_or_err}
-    trace = await vm_or_err.run(program)
+
+    try:
+        trace = await vm_or_err.run(program)
+    except Exception as exc:
+        logger.exception("vm_run_failed program_id=%s", program_id)
+        return {"error": f"Execution failed: {exc}", "program_id": program_id}
 
     trace_id = str(uuid.uuid4())
     trace_dict = trace.model_dump(mode="json") if hasattr(trace, "model_dump") else vars(trace)
