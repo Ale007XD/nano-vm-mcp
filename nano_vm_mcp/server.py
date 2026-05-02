@@ -6,9 +6,8 @@ import os
 import secrets
 from typing import Any
 
-from mcp.server import Server
+from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
-from mcp.server.models import NotificationOptions
 from mcp.types import TextContent, Tool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
@@ -31,7 +30,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer ") or not secrets.compare_digest(
-            auth[len("Bearer ") :].strip(), api_key
+            auth[len("Bearer "):].strip(), api_key
         ):
             return Response(
                 content='{"error": "Unauthorized"}',
