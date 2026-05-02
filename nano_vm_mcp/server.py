@@ -9,6 +9,7 @@ from typing import Any
 
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
+from mcp.server.models import NotificationOptions
 from mcp.types import TextContent, Tool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
@@ -162,7 +163,7 @@ def run_stdio() -> None:
                     server_name="nano-vm-mcp",
                     server_version="0.1.0",
                     capabilities=app.get_capabilities(
-                        notification_options=None,
+                        notification_options=NotificationOptions(),
                         experimental_capabilities={},
                     ),
                 ),
@@ -190,7 +191,7 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
                     server_name="nano-vm-mcp",
                     server_version="0.1.0",
                     capabilities=app.get_capabilities(
-                        notification_options=None,
+                        notification_options=NotificationOptions(),
                         experimental_capabilities={},
                     ),
                 ),
