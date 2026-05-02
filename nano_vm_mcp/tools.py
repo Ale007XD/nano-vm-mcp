@@ -103,11 +103,14 @@ async def run_program(
     trace_dict = trace.model_dump(mode="json") if hasattr(trace, "model_dump") else vars(trace)
     # Compute cost in a backward-compatible way
     if hasattr(trace, "total_cost_usd"):
-        cost = trace.total_cost_usd or 0.0
+        cost = float(trace.total_cost_usd or 0.0)
     elif hasattr(trace, "total_cost"):
         cost = float(trace.total_cost) or 0.0
     else:
         cost = 0.0
+
+    if not save_as:
+        store.save_program(program_id, "", program_data)
 
     store.save_trace(
         trace_id=trace_id,
