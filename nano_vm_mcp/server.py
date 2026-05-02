@@ -192,12 +192,20 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
     async def health(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok"})
 
-    starlette_app = Starlette(
+    # Protected sub-app: BearerAuthMiddleware applies only to /sse and /messages.
+    protected = Starlette(
         routes=[
-            Route("/health", endpoint=health),
             Route("/sse", endpoint=handle_sse),
             Mount("/messages", app=sse.handle_post_message),
         ],
         middleware=[Middleware(BearerAuthMiddleware)],
+    )
+
+    # Top-level app: /health is public, all other paths go to protected sub-app.
+    starlette_app = Starlette(
+        routes=[
+            Route("/health", endpoint=health),
+            Mount("/", app=protected),
+        ],
     )
     uvicorn.run(starlette_app, host=host, port=port)
