@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # нужен hatch-vcs для чтения git тегов
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -38,7 +38,8 @@ jobs:
     needs: lint-and-test
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    environment: pypi
+    permissions:
+      id-token: write  # обязательно для gh-action-pypi-publish
 
     steps:
       - uses: actions/checkout@v4
