@@ -52,7 +52,7 @@ def _build_vm(program_data: dict[str, Any]) -> ExecutionVM | str:
         from nano_vm.adapters import LiteLLMAdapter
     except ImportError:
         return (
-            "LiteLLMAdapter is not available. Install it with: pip install 'llm-nano-vm[litellm]'"
+            "LiteLLMAdapter is not available. Install it with: pip install 'nano-vm-mcp[litellm]'"
         )
     return ExecutionVM(llm=LiteLLMAdapter(model))
 
