@@ -18,7 +18,7 @@ from nano_vm_mcp.tools import run_program
 # Добавим явный id для тестов целостности БД
 MINIMAL_PROGRAM = {
     "id": "test-program-uuid",
-    "steps": [{"id": "s1", "type": "tool", "tool": "noop"}]
+    "steps": [{"id": "s1", "type": "tool", "tool": "noop"}],
 }
 
 
@@ -104,7 +104,7 @@ async def test_run_program_success_no_error_key(store):
     fake_trace.status = "COMPLETED"
     fake_trace.steps = []
     # Объекты Money/Decimal часто используются для стоимости, имитируем float
-    fake_trace.total_cost_usd = 0.0 
+    fake_trace.total_cost_usd = 0.0
     fake_trace.model_dump = MagicMock(return_value={"status": "COMPLETED", "steps": []})
 
     with patch("nano_vm_mcp.tools.ExecutionVM") as MockVM:
@@ -115,7 +115,7 @@ async def test_run_program_success_no_error_key(store):
 
     assert result.get("error") is None
     assert "trace_id" in result
-    
+
     # Дополнительная проверка: убедимся, что трейс действительно в базе
     db_trace = store.get_trace(result["trace_id"])
     assert db_trace is not None
