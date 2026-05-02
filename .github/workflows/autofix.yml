@@ -18,17 +18,20 @@ jobs:
         with:
           ref: ${{ github.head_ref || github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install Ruff
-        run: pip install "ruff>=0.4"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
 
-      - name: Run Ruff Check (Fixable errors)
-        run: ruff check --fix .
+      - name: Run Ruff Check (autofix)
+        run: ruff check --fix --unsafe-fixes .
         continue-on-error: true
 
       - name: Run Ruff Format
