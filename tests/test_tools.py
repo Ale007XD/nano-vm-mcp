@@ -1,10 +1,11 @@
 """Tests for MCP tool handlers (mock VM)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from nano_vm_mcp.store import ProgramStore
+import pytest
+
 from nano_vm_mcp import tools
+from nano_vm_mcp.store import ProgramStore
 
 
 @pytest.fixture

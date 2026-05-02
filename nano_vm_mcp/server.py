@@ -9,12 +9,12 @@ from typing import Any
 
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from .store import ProgramStore
 from . import tools as _tools
+from .store import ProgramStore
 
 _DB_PATH = os.getenv("NANO_VM_MCP_DB", "nano_vm_mcp.db")
 
@@ -150,6 +150,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 def run_stdio() -> None:
     """Start server in stdio mode (Claude Desktop / local MCP client)."""
     import asyncio
+
     from mcp.server.stdio import stdio_server
 
     async def _main() -> None:
@@ -176,7 +177,7 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
-    from starlette.routing import Route, Mount
+    from starlette.routing import Mount, Route
 
     sse = SseServerTransport("/messages")
 

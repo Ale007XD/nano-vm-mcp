@@ -1,13 +1,14 @@
 # tests/test_auth.py
 """Tests for SSE bearer auth middleware."""
 
-from starlette.testclient import TestClient
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
 from starlette.responses import JSONResponse
 from starlette.routing import Route
-from starlette.middleware import Middleware
+from starlette.testclient import TestClient
 
 from nano_vm_mcp.server import BearerAuthMiddleware
+
 
 async def _homepage(request):
     return JSONResponse({"ok": True})

@@ -52,7 +52,7 @@ def main() -> None:
 
     os.environ.setdefault("NANO_VM_MCP_DB", args.db)
 
-    from .server import run_stdio, run_sse
+    from .server import run_sse, run_stdio
 
     if args.transport == "stdio":
         run_stdio()
