@@ -31,7 +31,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer ") or not secrets.compare_digest(
-            auth[len("Bearer "):].strip(), api_key
+            auth[len("Bearer ") :].strip(), api_key
         ):
             return Response(
                 content='{"error": "Unauthorized"}',

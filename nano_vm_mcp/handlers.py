@@ -37,7 +37,9 @@ class ToolHandler(ABC):
         self._successor = successor
         return successor
 
-    async def handle(self, name: str, arguments: dict[str, Any], store: ProgramStore) -> list[TextContent]:
+    async def handle(
+        self, name: str, arguments: dict[str, Any], store: ProgramStore
+    ) -> list[TextContent]:
         result = await self._try_handle(name, arguments, store)
         if result is not None:
             return result
@@ -125,9 +127,7 @@ class UnknownToolHandler(ToolHandler):
 def build_chain() -> ToolHandler:
     """Construct and return the head of the tool-dispatch chain."""
     head = RunProgramHandler()
-    head.set_successor(GetTraceHandler()) \
-        .set_successor(ListProgramsHandler()) \
-        .set_successor(GetProgramHandler()) \
-        .set_successor(DeleteProgramHandler()) \
-        .set_successor(UnknownToolHandler())
+    head.set_successor(GetTraceHandler()).set_successor(ListProgramsHandler()).set_successor(
+        GetProgramHandler()
+    ).set_successor(DeleteProgramHandler()).set_successor(UnknownToolHandler())
     return head
