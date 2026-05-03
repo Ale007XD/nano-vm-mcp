@@ -31,6 +31,12 @@ via the [Model Context Protocol](https://modelcontextprotocol.io/).
 pip install nano-vm-mcp
 ```
 
+For programs with `llm` steps, install the LiteLLM extra:
+
+```bash
+pip install 'nano-vm-mcp[litellm]'
+```
+
 ## Usage
 
 ### stdio — Claude Desktop / local MCP client
@@ -55,10 +61,12 @@ nano-vm-mcp --transport stdio
 ### SSE — VPS / remote clients
 
 ```bash
-nano-vm-mcp --transport sse --port 8080
+NANO_VM_MCP_API_KEY=your-secret-token nano-vm-mcp --transport sse --port 8080
 ```
 
 MCP client URL: `http://<host>:8080/sse`
+
+With auth header: `Authorization: Bearer your-secret-token`
 
 ### Docker Compose (VPS)
 
@@ -73,6 +81,7 @@ services:
     environment:
       NANO_VM_MCP_DB: /data/nano_vm_mcp.db
       NANO_VM_MCP_PORT: 8080
+      NANO_VM_MCP_API_KEY: your-secret-token
     command: ["nano-vm-mcp", "--transport", "sse"]
 ```
 
@@ -89,11 +98,21 @@ cp .env.example .env
 | `NANO_VM_MCP_DB` | `nano_vm_mcp.db` | SQLite WAL database path |
 | `NANO_VM_MCP_HOST` | `0.0.0.0` | SSE bind host |
 | `NANO_VM_MCP_PORT` | `8080` | SSE bind port |
+| `NANO_VM_MCP_API_KEY` | _(unset)_ | Bearer token for SSE auth. If unset, all requests are allowed (warning logged) |
+| `NANO_VM_MCP_LLM_MODEL` | _(unset)_ | LiteLLM model string for `llm` steps (e.g. `openrouter/meta-llama/llama-3.3-70b-instruct:free`) |
+
+## Endpoints
+
+| Path | Auth | Description |
+| :--- | :--- | :--- |
+| `GET /health` | none | Liveness probe — always returns `{"status": "ok"}` |
+| `GET /sse` | bearer | SSE transport entry point |
+| `POST /messages` | bearer | MCP message endpoint |
 
 ## Example: run a program
 
 ```python
-import json, asyncio
+import asyncio
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 
@@ -104,7 +123,8 @@ program = {
 }
 
 async def main():
-    async with sse_client("http://localhost:8080/sse") as (r, w):
+    headers = {"Authorization": "Bearer your-secret-token"}
+    async with sse_client("http://localhost:8080/sse", headers=headers) as (r, w):
         async with ClientSession(r, w) as session:
             await session.initialize()
             result = await session.call_tool("run_program", {"program": program, "save_as": "demo"})
@@ -134,17 +154,21 @@ cleared. This is a partial sandbox, not full isolation.
 `ExecutionVM` only calls tools that are explicitly registered in its tool registry.
 Unregistered tool names raise `VMError` — they are not silently executed.
 
+`nano-vm-mcp` does not support registering custom tool functions in the server process.
+Programs with `tool` steps will raise `VMError` unless you run `ExecutionVM` directly
+with a populated tool registry. This is an intentional architectural constraint.
+
 Avoid registering destructive or privileged tools (filesystem writes, shell exec,
 database mutations) without an explicit access control layer in your tool implementation.
 
 ### SSE transport and auth
 
-The SSE transport (`--transport sse`) has **no authentication** in v0.1.0.
-Anyone who knows the URL can call `run_program` on your server.
+Set `NANO_VM_MCP_API_KEY` to enable bearer token authentication on the SSE transport.
+The comparison is timing-safe (`secrets.compare_digest`). If the variable is unset,
+a warning is logged to stderr and all requests are allowed — suitable for localhost only.
 
-**Do not expose the SSE endpoint to the public internet without a reverse proxy
-with auth** (e.g. nginx + bearer token, Cloudflare Access, or a VPN).
-Auth middleware is on the roadmap for v0.2.0.
+**Do not expose the SSE endpoint to the public internet without `NANO_VM_MCP_API_KEY` set**
+or behind a reverse proxy with auth (nginx, Cloudflare Access, VPN).
 
 ---
 
@@ -153,6 +177,8 @@ Auth middleware is on the roadmap for v0.2.0.
 - [x] `run_program`, `get_trace`, `list_programs`, `get_program`, `delete_program` (v0.1.0)
 - [x] stdio + SSE transports
 - [x] SQLite WAL persistence
-- [x] Auth middleware for SSE — NANO_VM_MCP_API_KEY bearer token, timing-safe (v0.2.0)
+- [x] Bearer token auth for SSE — `NANO_VM_MCP_API_KEY`, timing-safe (v0.1.0)
+- [x] `/health` liveness endpoint (unauthenticated)
+- [x] Structured error responses + logging
 - [ ] `plan_and_run` — intent string → Planner → run (P7)
 - [ ] Docker image to GHCR
