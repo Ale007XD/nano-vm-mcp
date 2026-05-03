@@ -26,36 +26,45 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          # Устанавливаем зависимости бота
+          pip install -r requirements.txt
+          # Явно ставим инструменты для CI
+          pip install ruff pytest
 
       - name: Lint (ruff)
-        run: ruff check nano_vm_mcp/ tests/
+        # Проверяем папку с кодом бота (app) и тесты
+        run: ruff check app/ tests/
 
       - name: Test (pytest)
         run: pytest tests/ -v
 
-  publish:
-    needs: lint-and-test
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      id-token: write  # обязательно для gh-action-pypi-publish
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Build
-        run: |
-          pip install build hatch hatch-vcs
-          python -m build
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+  # Блок публикации в PyPI закомментирован, так как nano-vm-bot — это бот,
+  # а не публичная python-библиотека. Бот не нужно отправлять в PyPI.
+  # Если тебе нужен деплой (например, сборка Docker-образа), 
+  # этот шаг следует переписать под docker/build-push-action.
+  
+  # publish:
+  #   needs: lint-and-test
+  #   runs-on: ubuntu-latest
+  #   if: startsWith(github.ref, 'refs/tags/v')
+  #   permissions:
+  #     id-token: write  # обязательно для gh-action-pypi-publish
+  # 
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  # 
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.12"
+  # 
+  #     - name: Build
+  #       run: |
+  #         pip install build hatch hatch-vcs
+  #         python -m build
+  # 
+  #     - name: Publish to PyPI
+  #       uses: pypa/gh-action-pypi-publish@release/v1
+  #       with:
+  #         password: ${{ secrets.PYPI_API_TOKEN }}
