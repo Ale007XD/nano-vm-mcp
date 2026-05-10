@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def _has_llm_steps(program_data: dict[str, Any]) -> bool:
     """Return True if any step (including parallel sub-steps) requires an LLM."""
 
-    def _scan(steps: list[dict]) -> bool:
+    def _scan(steps: list[dict[str, Any]]) -> bool:
         for step in steps:
             if step.get("type") == "llm":
                 return True

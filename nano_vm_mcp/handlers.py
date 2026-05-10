@@ -207,11 +207,11 @@ class GovernedRunProgramHandler(ToolHandler):
         super().__init__()
         self._executor = GovernedToolExecutor(policy=policy)
 
-    def _collect_tools(self, program_data: dict) -> list[str]:
+    def _collect_tools(self, program_data: dict[str, Any]) -> list[str]:
         """Собирает все tool-имена из шагов программы (включая parallel sub-steps)."""
         tools: list[str] = []
 
-        def _scan(steps: list[dict]) -> None:
+        def _scan(steps: list[dict[str, Any]]) -> None:
             for step in steps:
                 if step.get("type") == "tool" and step.get("tool"):
                     tools.append(step["tool"])
@@ -222,7 +222,7 @@ class GovernedRunProgramHandler(ToolHandler):
         return tools
 
     async def _try_handle(
-        self, name: str, arguments: dict, store: ProgramStore
+        self, name: str, arguments: dict[str, Any], store: ProgramStore
     ) -> list[TextContent] | None:
         if name != "run_program":
             return None
