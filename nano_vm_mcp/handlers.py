@@ -12,9 +12,9 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from mcp.types import TextContent
+from nano_vm.models import PolicySnapshot
 
 from . import tools as _tools
-from nano_vm.models import PolicySnapshot
 from .store import ProgramStore
 
 
@@ -118,8 +118,6 @@ class UnknownToolHandler(ToolHandler):
         self, name: str, arguments: dict[str, Any], store: ProgramStore
     ) -> list[TextContent] | None:
         return _ok({"error": f"Unknown tool: {name}"})
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -238,14 +236,16 @@ class GovernedRunProgramHandler(ToolHandler):
                 denied.append(tool_name)
 
         if denied:
-            return _ok({
-                "error": "capability_denied",
-                "denied_tools": denied,
-                "detail": (
-                    f"Tool(s) {denied} not permitted by active policy. "
-                    "Update PolicySnapshot.tool_capabilities to allow them."
-                ),
-            })
+            return _ok(
+                {
+                    "error": "capability_denied",
+                    "denied_tools": denied,
+                    "detail": (
+                        f"Tool(s) {denied} not permitted by active policy. "
+                        "Update PolicySnapshot.tool_capabilities to allow them."
+                    ),
+                }
+            )
 
         result = await _tools.run_program(
             store,

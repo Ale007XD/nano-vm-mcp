@@ -80,9 +80,7 @@ class TestGovernedToolExecutor:
         executor = GovernedToolExecutor(policy=None)
         executor.check("any_tool", ["any.capability"])
 
-    def test_allow_tool_no_required_capabilities(
-        self, policy: PolicySnapshot
-    ) -> None:
+    def test_allow_tool_no_required_capabilities(self, policy: PolicySnapshot) -> None:
         executor = GovernedToolExecutor(policy=policy)
         executor.check("send_email", [])
         executor.check("send_email", None)  # type: ignore[arg-type]
@@ -99,9 +97,7 @@ class TestGovernedToolExecutor:
         executor = GovernedToolExecutor(policy=policy)
         assert executor.is_allowed("send_email", ["email.admin"]) is False
 
-    def test_error_message_contains_allowed_caps(
-        self, policy: PolicySnapshot
-    ) -> None:
+    def test_error_message_contains_allowed_caps(self, policy: PolicySnapshot) -> None:
         executor = GovernedToolExecutor(policy=policy)
         with pytest.raises(CapabilityDeniedError) as exc_info:
             executor.check("send_email", ["email.delete"])
@@ -117,8 +113,7 @@ class TestGovernedToolExecutor:
 def _make_program_data(tool_names: list[str]) -> dict[str, Any]:
     return {
         "steps": [
-            {"id": f"s{i}", "type": "tool", "tool": name}
-            for i, name in enumerate(tool_names)
+            {"id": f"s{i}", "type": "tool", "tool": name} for i, name in enumerate(tool_names)
         ]
     }
 
@@ -130,13 +125,9 @@ class TestGovernedRunProgramHandler:
         store = MagicMock()
         program_data = _make_program_data(["send_email", "get_weather"])
 
-        with patch(
-            "nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock
-        ) as mock_run:
+        with patch("nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {"trace_id": "t1", "status": "SUCCESS"}
-            result = await handler._try_handle(
-                "run_program", {"program": program_data}, store
-            )
+            result = await handler._try_handle("run_program", {"program": program_data}, store)
 
         assert result is not None
         payload = json.loads(result[0].text)
@@ -149,12 +140,8 @@ class TestGovernedRunProgramHandler:
         store = MagicMock()
         program_data = _make_program_data(["send_email", "exec_shell"])
 
-        with patch(
-            "nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock
-        ) as mock_run:
-            result = await handler._try_handle(
-                "run_program", {"program": program_data}, store
-            )
+        with patch("nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock) as mock_run:
+            result = await handler._try_handle("run_program", {"program": program_data}, store)
 
         assert result is not None
         payload = json.loads(result[0].text)
@@ -168,21 +155,15 @@ class TestGovernedRunProgramHandler:
         store = MagicMock()
         program_data = _make_program_data(["any_tool", "another_tool"])
 
-        with patch(
-            "nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock
-        ) as mock_run:
+        with patch("nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {"trace_id": "t2", "status": "SUCCESS"}
-            result = await handler._try_handle(
-                "run_program", {"program": program_data}, store
-            )
+            result = await handler._try_handle("run_program", {"program": program_data}, store)
 
         mock_run.assert_awaited_once()
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_unknown_tool_name_returns_none(
-        self, policy: PolicySnapshot
-    ) -> None:
+    async def test_unknown_tool_name_returns_none(self, policy: PolicySnapshot) -> None:
         handler = GovernedRunProgramHandler(policy=policy)
         store = MagicMock()
         result = await handler._try_handle("get_trace", {"trace_id": "x"}, store)
@@ -205,12 +186,8 @@ class TestGovernedRunProgramHandler:
             ]
         }
 
-        with patch(
-            "nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock
-        ) as mock_run:
-            result = await handler._try_handle(
-                "run_program", {"program": program_data}, store
-            )
+        with patch("nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock) as mock_run:
+            result = await handler._try_handle("run_program", {"program": program_data}, store)
 
         payload = json.loads(result[0].text)  # type: ignore[index]
         assert payload["error"] == "capability_denied"
