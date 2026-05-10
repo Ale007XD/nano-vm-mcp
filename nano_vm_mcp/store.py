@@ -35,6 +35,11 @@ def _init_schema(con: sqlite3.Connection) -> None:
             created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
             FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS state_contexts (
+            trace_id     TEXT PRIMARY KEY,
+            context_json TEXT NOT NULL,
+            updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
     """)
     con.commit()
 
@@ -113,3 +118,33 @@ class ProgramStore:
             "SELECT trace_json FROM traces WHERE id = ?", (trace_id,)
         ).fetchone()
         return json.loads(row["trace_json"]) if row else None
+
+    # ------------------------------------------------------------------
+    # StateContexts — TRACE projection persistence (v0.3.0)
+    # ------------------------------------------------------------------
+
+    def save_state_context(self, trace_id: str, context: dict[str, Any]) -> None:
+        """Сохраняет (или перезаписывает) projection-контекст для trace_id."""
+        with self._lock:
+            self._con.execute(
+                """INSERT OR REPLACE INTO state_contexts (trace_id, context_json, updated_at)
+                   VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))""",
+                (trace_id, json.dumps(context)),
+            )
+            self._con.commit()
+
+    def load_state_context(self, trace_id: str) -> dict[str, Any] | None:
+        """Возвращает projection-контекст по trace_id или None если не найден."""
+        row = self._con.execute(
+            "SELECT context_json FROM state_contexts WHERE trace_id = ?", (trace_id,)
+        ).fetchone()
+        return json.loads(row["context_json"]) if row else None
+
+    def delete_state_context(self, trace_id: str) -> bool:
+        """Удаляет projection-контекст. Возвращает True если запись существовала."""
+        with self._lock:
+            cur = self._con.execute(
+                "DELETE FROM state_contexts WHERE trace_id = ?", (trace_id,)
+            )
+            self._con.commit()
+            return cur.rowcount > 0
