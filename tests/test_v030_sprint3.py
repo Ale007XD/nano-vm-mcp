@@ -14,14 +14,12 @@ Sprint 3: Assembly & Tombstoning — Gateway
 from __future__ import annotations
 
 import json
-import tempfile
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from nano_vm_mcp.store import ProgramStore
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -152,6 +150,7 @@ class TestGovernedRunProgramHandlerTraceProjection:
         self, store: ProgramStore
     ) -> None:
         from nano_vm.models import PolicySnapshot
+
         from nano_vm_mcp.handlers import GovernedRunProgramHandler
 
         policy = PolicySnapshot(
@@ -162,11 +161,7 @@ class TestGovernedRunProgramHandlerTraceProjection:
         handler = GovernedRunProgramHandler(policy=policy)
 
         arguments: dict[str, Any] = {
-            "program": {
-                "steps": [
-                    {"id": "s1", "type": "tool", "tool": "forbidden_tool"}
-                ]
-            }
+            "program": {"steps": [{"id": "s1", "type": "tool", "tool": "forbidden_tool"}]}
         }
 
         result = await handler.handle("run_program", arguments, store)
@@ -178,9 +173,7 @@ class TestGovernedRunProgramHandlerTraceProjection:
         assert store.load_state_context("any") is None
 
     @pytest.mark.asyncio
-    async def test_unknown_tool_not_handled(
-        self, handler: Any, store: ProgramStore
-    ) -> None:
+    async def test_unknown_tool_not_handled(self, handler: Any, store: ProgramStore) -> None:
         result = await handler.handle("nonexistent_tool", {}, store)
         response = json.loads(result[0].text)
         # Передаётся successor → UnknownToolHandler
