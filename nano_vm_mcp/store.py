@@ -143,8 +143,6 @@ class ProgramStore:
     def delete_state_context(self, trace_id: str) -> bool:
         """Удаляет projection-контекст. Возвращает True если запись существовала."""
         with self._lock:
-            cur = self._con.execute(
-                "DELETE FROM state_contexts WHERE trace_id = ?", (trace_id,)
-            )
+            cur = self._con.execute("DELETE FROM state_contexts WHERE trace_id = ?", (trace_id,))
             self._con.commit()
             return cur.rowcount > 0
