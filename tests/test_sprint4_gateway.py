@@ -15,7 +15,6 @@ import pytest
 from nano_vm_mcp.handlers import GovernanceEnvelope, GovernedRunProgramHandler
 from nano_vm_mcp.store import ProgramStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -106,7 +105,9 @@ class TestGovernanceEnvelopeStore:
 
         # Вставляем в обратном порядке — должны вернуться по step_id ASC
         for i in reversed(range(5)):
-            store.save_envelope(eid, step_id=i, policy_hash="ph", snapshot_hash=f"sh{i}", payload={"i": i})
+            store.save_envelope(
+                eid, step_id=i, policy_hash="ph", snapshot_hash=f"sh{i}", payload={"i": i}
+            )
 
         rows = store.get_envelopes(eid)
         assert [r["step_id"] for r in rows] == list(range(5))
@@ -171,6 +172,7 @@ class TestGovernedRunProgramHandlerEnvelope:
         # Тест проверяет именно эту ветку: error → no envelope.
         result_content = await handler.handle("run_program", {"program": program}, store)
         import json as _json
+
         result = _json.loads(result_content[0].text)
 
         # Execution failed (tool не зарегистрирован) → envelope не сохранён
@@ -195,6 +197,7 @@ class TestGovernedRunProgramHandlerEnvelope:
         program = {"steps": [{"id": "s1", "type": "tool", "tool": "send_email"}]}
         result_content = await handler.handle("run_program", {"program": program}, store)
         import json as _json
+
         result = _json.loads(result_content[0].text)
 
         assert result["error"] == "capability_denied"
