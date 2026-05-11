@@ -17,7 +17,6 @@ import pytest
 from nano_vm_mcp.handlers import GovernanceEnvelope, GovernedRunProgramHandler
 from nano_vm_mcp.store import ProgramStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -81,8 +80,11 @@ class TestGovernanceEnvelopeStore:
         eid = str(uuid.uuid4())
 
         rowid = store.save_envelope(
-            execution_id=eid, step_id=0, policy_hash="ph",
-            snapshot_hash="sh", payload={"status": "ok"},
+            execution_id=eid,
+            step_id=0,
+            policy_hash="ph",
+            snapshot_hash="sh",
+            payload={"status": "ok"},
         )
         assert isinstance(rowid, int)
 
@@ -99,8 +101,9 @@ class TestGovernanceEnvelopeStore:
         store = _store()
         eid = str(uuid.uuid4())
         for i in reversed(range(5)):
-            store.save_envelope(eid, step_id=i, policy_hash="ph",
-                                snapshot_hash=f"sh{i}", payload={"i": i})
+            store.save_envelope(
+                eid, step_id=i, policy_hash="ph", snapshot_hash=f"sh{i}", payload={"i": i}
+            )
         assert [r["step_id"] for r in store.get_envelopes(eid)] == list(range(5))
 
     def test_get_envelopes_empty(self) -> None:
@@ -147,11 +150,11 @@ def _fake_run_factory(trace_id: str, steps: int = 2):
             "cost": 0.0,
             "error": None,
         }
+
     return _fake
 
 
 class TestGovernedRunProgramHandlerEnvelope:
-
     @pytest.mark.asyncio
     async def test_envelope_saved_on_success(self) -> None:
         """Успешный run → envelope сохранён в store."""
@@ -169,11 +172,16 @@ class TestGovernedRunProgramHandlerEnvelope:
             "steps": [],
         }
         store.save_trace(
-            trace_id=trace_id, program_id="prog-1", status="success",
-            steps_count=2, total_cost=0.0, trace=fake_trace,
+            trace_id=trace_id,
+            program_id="prog-1",
+            status="success",
+            steps_count=2,
+            total_cost=0.0,
+            trace=fake_trace,
         )
 
         import nano_vm_mcp.tools as _tools_module
+
         original = _tools_module.run_program
         _tools_module.run_program = _fake_run_factory(trace_id, steps=2)
         try:
@@ -189,8 +197,8 @@ class TestGovernedRunProgramHandlerEnvelope:
         assert len(envelopes) == 1
         env = envelopes[0]
         assert env["execution_id"] == trace_id
-        assert env["step_id"] == 1          # max(2-1, 0)
-        assert env["policy_hash"] == ""     # policy=None
+        assert env["step_id"] == 1  # max(2-1, 0)
+        assert env["policy_hash"] == ""  # policy=None
         assert env["payload"]["projection_target"] == "TRACE"
         assert len(env["canonical_snapshot_hash"]) == 64  # sha256 hex
 
@@ -201,6 +209,7 @@ class TestGovernedRunProgramHandlerEnvelope:
         handler = GovernedRunProgramHandler(policy=None)
 
         import nano_vm_mcp.tools as _tools_module
+
         original = _tools_module.run_program
 
         async def _fake_error(s, program_data, save_as=""):
@@ -242,6 +251,7 @@ class TestGovernedRunProgramHandlerEnvelope:
         trace_id = str(uuid.uuid4())
 
         import nano_vm_mcp.tools as _tools_module
+
         original = _tools_module.run_program
         _tools_module.run_program = _fake_run_factory(trace_id, steps=1)
         try:
