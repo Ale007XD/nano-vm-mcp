@@ -252,6 +252,18 @@ class GovernedRunProgramHandler(ToolHandler):
             program_data,
             arguments.get("save_as", ""),
         )
+        # TRACE projection: сохраняем метаданные после успешного запуска (v0.3.0)
+        trace_id = result.get("trace_id") if isinstance(result, dict) else None
+        if trace_id:
+            store.save_state_context(
+                trace_id,
+                {
+                    "trace_id": trace_id,
+                    "status": result.get("status"),
+                    "steps_count": result.get("steps_count", 0),
+                    "projection_target": "TRACE",
+                },
+            )
         return _ok(result)
 
 
