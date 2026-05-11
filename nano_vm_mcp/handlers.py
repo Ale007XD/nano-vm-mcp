@@ -305,9 +305,7 @@ class GovernedRunProgramHandler(ToolHandler):
                             current_b.append(current_b[-1])
                         next_b: list[bytes] = []
                         for i in range(0, len(current_b), 2):
-                            next_b.append(
-                                hashlib.sha256(current_b[i] + current_b[i + 1]).digest()
-                            )
+                            next_b.append(hashlib.sha256(current_b[i] + current_b[i + 1]).digest())
                         current_b = next_b
                     snapshot_hash = current_b[0].hex()
         else:
