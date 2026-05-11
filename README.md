@@ -133,13 +133,52 @@ async def main():
 asyncio.run(main())
 ```
 
+## Architecture
+
+nano-vm-mcp acts as a **Stateful Gateway** layered over the `llm-nano-vm` Execution Kernel.
+Every successful execution step is wrapped in a `GovernanceEnvelope` and persisted as an
+immutable audit trail. The kernel and gateway are strictly isolated: the gateway never
+touches execution logic, the kernel never touches persistence or policy.
+
+```
+MCP Client
+  → nano-vm-mcp (Gateway)
+      → GovernedRunProgramHandler   ← PolicySnapshot, CapabilityRef resolution
+          → llm-nano-vm (Kernel)    ← deterministic FSM, ASTEngine, ProjectionLayer
+      → GovernanceEnvelope store    ← SQLite WAL, append-only audit log
+```
+
+### GovernanceEnvelope
+
+Each successful execution step produces a `GovernanceEnvelope` (frozen Pydantic model)
+stored in the `governance_envelopes` table:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `execution_id` | `str` | Session / trace identifier |
+| `step_id` | `int` | Step index within the execution |
+| `policy_hash` | `str` | SHA-256 of the active `PolicySnapshot` |
+| `canonical_snapshot_hash` | `str` | Merkle/delta hash of `CanonicalState` at this step |
+| `payload` | `dict \| list` | Projected (sanitized) step output |
+
+Envelopes are written only on `error=None` — they form a tamper-evident audit trail of
+successful transitions, not of failures.
+
+### CapabilityRef and Tombstoning
+
+Sensitive values in `CanonicalState` are stored as `CapabilityRef` tokens
+(`vault://secret/<id>`) rather than raw plaintext. On a GDPR erasure event (`E_gdpr_erase`),
+the target ref is tombstoned (`is_tombstone=True`). All subsequent projections return the
+constant `[REDACTED_TOMBSTONE]`, preserving the hash chain without exposing the erased value.
+
 ## Security
 
 ### Condition expressions
 
-`run_program` accepts a full Program dict — including `condition` steps with
-arbitrary expression strings. These are evaluated via `eval()` with `__builtins__`
-cleared. This is a partial sandbox, not full isolation.
+`run_program` accepts a full `Program` dict — including `condition` steps with expression
+strings. Conditions are evaluated by the **ASTEngine** — a deterministic, declarative
+evaluator that replaces `eval()`. No Python builtins are accessible; the expression is
+parsed into a validated JSON AST before execution.
 
 **Rules for safe use:**
 
@@ -149,14 +188,14 @@ cleared. This is a partial sandbox, not full isolation.
 - If you expose this MCP server to untrusted clients, validate or allowlist condition
   expressions before passing them to `run_program`.
 
-### Tool registry
+### Capability verification
 
-`ExecutionVM` only calls tools that are explicitly registered in its tool registry.
-Unregistered tool names raise `VMError` — they are not silently executed.
+`GovernedToolExecutor` intercepts every tool call and verifies the tool name against
+the active `PolicySnapshot.tool_capabilities` before execution. Tools not listed in the
+policy raise `CapabilityDeniedError` — they are never silently executed.
 
-`nano-vm-mcp` does not support registering custom tool functions in the server process.
-Programs with `tool` steps will raise `VMError` unless you run `ExecutionVM` directly
-with a populated tool registry. This is an intentional architectural constraint.
+`ExecutionVM` additionally rejects any tool name not registered in its tool registry
+with a `VMError`. These are two independent enforcement layers.
 
 Avoid registering destructive or privileged tools (filesystem writes, shell exec,
 database mutations) without an explicit access control layer in your tool implementation.
@@ -175,10 +214,18 @@ or behind a reverse proxy with auth (nginx, Cloudflare Access, VPN).
 ## Roadmap
 
 - [x] `run_program`, `get_trace`, `list_programs`, `get_program`, `delete_program` (v0.1.0)
-- [x] stdio + SSE transports
-- [x] SQLite WAL persistence
+- [x] stdio + SSE transports (v0.1.0)
+- [x] SQLite WAL persistence (v0.1.0)
 - [x] Bearer token auth for SSE — `NANO_VM_MCP_API_KEY`, timing-safe (v0.1.0)
-- [x] `/health` liveness endpoint (unauthenticated)
-- [x] Structured error responses + logging
+- [x] `/health` liveness endpoint (v0.1.0)
+- [x] Structured error responses + logging (v0.1.0)
+- [x] `GovernanceEnvelope` — immutable audit trail per execution step (v0.3.0)
+- [x] `GovernedRunProgramHandler` + `GovernedToolExecutor` + `CapabilityDeniedError` (v0.3.0)
+- [x] `PolicySnapshot` CRUD — capability-gated tool execution (v0.3.0)
+- [x] `CapabilityRef` + tombstoning — GDPR erasure with hash-chain preservation (v0.3.0)
+- [x] ASTEngine in condition steps — `eval()` removed from production path (v0.3.0)
+- [x] `governance_envelopes` table — append-only SQLite store with execution index (v0.3.0)
 - [ ] `plan_and_run` — intent string → Planner → run (P7)
+- [ ] `POST /mcp/session/{execution_id}/step` — full RFC step lifecycle with `vm.step()`
+- [ ] `RemoteProjectionProvider` — IPC connector to Vault for JIT plaintext access
 - [ ] Docker image to GHCR
