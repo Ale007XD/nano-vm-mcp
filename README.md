@@ -175,10 +175,12 @@ constant `[REDACTED_TOMBSTONE]`, preserving the hash chain without exposing the 
 
 ### Condition expressions
 
-`run_program` accepts a full `Program` dict — including `condition` steps with expression
-strings. Conditions are evaluated by the **ASTEngine** — a deterministic, declarative
-evaluator that replaces `eval()`. No Python builtins are accessible; the expression is
-parsed into a validated JSON AST before execution.
+`run_program` accepts a full Program dict — including `condition` steps with
+expression strings. As of v0.3.0, these are evaluated by the **ASTEngine** —
+a deterministic sandboxed interpreter built into `llm-nano-vm`. `eval()` is
+not used. The engine supports a fixed, safe operator set: `==`, `!=`, `>`,
+`<`, `in`, `not in`, `and`, `or`, `not`, `contains`. Arbitrary Python
+expressions outside this set are rejected with a parse error.
 
 **Rules for safe use:**
 
@@ -187,7 +189,7 @@ parsed into a validated JSON AST before execution.
   condition expression itself.
 - If you expose this MCP server to untrusted clients, validate or allowlist condition
   expressions before passing them to `run_program`.
-
+  
 ### Capability verification
 
 `GovernedToolExecutor` intercepts every tool call and verifies the tool name against
