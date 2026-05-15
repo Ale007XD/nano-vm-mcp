@@ -58,7 +58,7 @@ app = Server("nano-vm-mcp")
 # ---------------------------------------------------------------------------
 
 
-@app.list_tools()
+@app.list_tools()  # type: ignore[no-untyped-call, untyped-decorator]
 async def list_tools() -> list[Tool]:
     return [
         Tool(
@@ -130,7 +130,7 @@ async def list_tools() -> list[Tool]:
 # ---------------------------------------------------------------------------
 
 
-@app.call_tool()
+@app.call_tool()  # type: ignore[untyped-decorator]
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     return await _chain.handle(name, arguments, _store)
 

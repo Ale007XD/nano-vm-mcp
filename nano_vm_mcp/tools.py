@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def _has_llm_steps(program_data: dict[str, Any]) -> bool:
     """Return True if any step (including parallel sub-steps) requires an LLM."""
 
-    def _scan(steps: list[dict]) -> bool:
+    def _scan(steps: list[dict[str, Any]]) -> bool:
         for step in steps:
             if step.get("type") == "llm":
                 return True
@@ -58,6 +58,24 @@ def _build_vm(program_data: dict[str, Any]) -> ExecutionVM | str:
             "LiteLLMAdapter is not available. Install it with: pip install 'nano-vm-mcp[litellm]'"
         )
     return ExecutionVM(llm=LiteLLMAdapter(model))
+
+
+def _extract_cost(trace: Any) -> float:
+    """
+    Извлекает стоимость из Trace совместимым способом.
+
+    total_cost_usd — метод (callable), не property. Нужно вызывать.
+    Fallback на total_cost (атрибут, старые версии).
+    """
+    if hasattr(trace, "total_cost_usd"):
+        val = trace.total_cost_usd
+        # Может быть методом или property в зависимости от версии nano_vm
+        if callable(val):
+            val = val()
+        return float(val or 0.0)
+    if hasattr(trace, "total_cost"):
+        return float(trace.total_cost or 0.0)
+    return 0.0
 
 
 async def run_program(
@@ -101,13 +119,7 @@ async def run_program(
 
     trace_id = str(uuid.uuid4())
     trace_dict = trace.model_dump(mode="json") if hasattr(trace, "model_dump") else vars(trace)
-    # Compute cost in a backward-compatible way
-    if hasattr(trace, "total_cost_usd"):
-        cost = float(trace.total_cost_usd or 0.0)
-    elif hasattr(trace, "total_cost"):
-        cost = float(trace.total_cost) or 0.0
-    else:
-        cost = 0.0
+    cost = _extract_cost(trace)
 
     if not save_as:
         store.save_program(program_id, "", program_data)

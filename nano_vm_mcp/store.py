@@ -1,4 +1,4 @@
-"""nano_vm_mcp.store — SQLite WAL persistence for Programs and Traces."""
+"""nano_vm_mcp.store — SQLite WAL persistence for Programs, Traces, and GovernanceEnvelopes."""
 
 from __future__ import annotations
 
@@ -35,6 +35,22 @@ def _init_schema(con: sqlite3.Connection) -> None:
             created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
             FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS state_contexts (
+            trace_id     TEXT PRIMARY KEY,
+            context_json TEXT NOT NULL,
+            updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE TABLE IF NOT EXISTS governance_envelopes (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            execution_id    TEXT    NOT NULL,
+            step_id         INTEGER NOT NULL,
+            policy_hash     TEXT    NOT NULL,
+            snapshot_hash   TEXT    NOT NULL,
+            payload_json    TEXT    NOT NULL,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_gov_envelopes_execution_id
+            ON governance_envelopes (execution_id);
     """)
     con.commit()
 
@@ -113,3 +129,108 @@ class ProgramStore:
             "SELECT trace_json FROM traces WHERE id = ?", (trace_id,)
         ).fetchone()
         return json.loads(row["trace_json"]) if row else None
+
+    # ------------------------------------------------------------------
+    # StateContexts — TRACE projection persistence (v0.3.0)
+    # ------------------------------------------------------------------
+
+    def save_state_context(self, trace_id: str, context: dict[str, Any]) -> None:
+        """Сохраняет (или перезаписывает) projection-контекст для trace_id."""
+        with self._lock:
+            self._con.execute(
+                """INSERT OR REPLACE INTO state_contexts (trace_id, context_json, updated_at)
+                   VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))""",
+                (trace_id, json.dumps(context)),
+            )
+            self._con.commit()
+
+    def load_state_context(self, trace_id: str) -> dict[str, Any] | None:
+        """Возвращает projection-контекст по trace_id или None если не найден."""
+        row = self._con.execute(
+            "SELECT context_json FROM state_contexts WHERE trace_id = ?", (trace_id,)
+        ).fetchone()
+        return json.loads(row["context_json"]) if row else None
+
+    def delete_state_context(self, trace_id: str) -> bool:
+        """Удаляет projection-контекст. Возвращает True если запись существовала."""
+        with self._lock:
+            cur = self._con.execute("DELETE FROM state_contexts WHERE trace_id = ?", (trace_id,))
+            self._con.commit()
+            return cur.rowcount > 0
+
+    # ------------------------------------------------------------------
+    # GovernanceEnvelopes — RFC v0.7.0 (Sprint4)
+    # ------------------------------------------------------------------
+
+    def save_envelope(
+        self,
+        execution_id: str,
+        step_id: int,
+        policy_hash: str,
+        snapshot_hash: str,
+        payload: dict[str, Any] | list[Any],
+    ) -> int:
+        """
+        Сохраняет GovernanceEnvelope после каждого шага lifecycle.
+
+        Args:
+            execution_id:  trace_id / run identifier.
+            step_id:       порядковый номер шага (0-based index из Trace).
+            policy_hash:   PolicySnapshot.policy_hash на момент шага.
+            snapshot_hash: Trace.canonical_snapshot_hash() после шага.
+            payload:       TRACE-projected payload (dict или list).
+
+        Returns:
+            rowid вставленной записи.
+        """
+        with self._lock:
+            cur = self._con.execute(
+                """INSERT INTO governance_envelopes
+                       (execution_id, step_id, policy_hash, snapshot_hash, payload_json)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (execution_id, step_id, policy_hash, snapshot_hash, json.dumps(payload)),
+            )
+            self._con.commit()
+            return cur.lastrowid  # type: ignore[return-value]
+
+    def get_envelopes(self, execution_id: str) -> list[dict[str, Any]]:
+        """
+        Возвращает все GovernanceEnvelope для execution_id, отсортированные по step_id.
+
+        Каждый элемент соответствует полям GovernanceEnvelope из RFC:
+          execution_id, step_id, policy_hash, canonical_snapshot_hash, payload, created_at.
+        """
+        rows = self._con.execute(
+            """SELECT execution_id, step_id, policy_hash, snapshot_hash,
+                      payload_json, created_at
+               FROM governance_envelopes
+               WHERE execution_id = ?
+               ORDER BY step_id""",
+            (execution_id,),
+        ).fetchall()
+        return [
+            {
+                "execution_id": r["execution_id"],
+                "step_id": r["step_id"],
+                "policy_hash": r["policy_hash"],
+                "canonical_snapshot_hash": r["snapshot_hash"],
+                "payload": json.loads(r["payload_json"]),
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+
+    def delete_envelopes(self, execution_id: str) -> int:
+        """
+        Удаляет все envelope для execution_id.
+        Используется при forensic cleanup или тестах.
+
+        Returns:
+            Количество удалённых записей.
+        """
+        with self._lock:
+            cur = self._con.execute(
+                "DELETE FROM governance_envelopes WHERE execution_id = ?", (execution_id,)
+            )
+            self._con.commit()
+            return cur.rowcount
