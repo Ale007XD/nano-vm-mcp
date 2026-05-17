@@ -15,7 +15,7 @@
 MCP server for [llm-nano-vm](https://github.com/Ale007XD/nano_vm) — run deterministic LLM programs
 via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
-## Tools
+## Tools 
 
 | Tool | Description |
 | :--- | :--- |
