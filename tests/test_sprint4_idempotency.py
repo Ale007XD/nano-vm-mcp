@@ -8,7 +8,6 @@ import pytest
 
 from nano_vm_mcp.store import ProgramStore
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -122,13 +121,12 @@ def program_data() -> dict:
 @pytest.fixture
 def handler(store: ProgramStore):  # type: ignore[no-untyped-def]
     from nano_vm_mcp.handlers import GovernedRunProgramHandler
+
     return GovernedRunProgramHandler(policy=None), store
 
 
 @pytest.mark.asyncio
-async def test_ip06_pending_status_run_proceeds(
-    store: ProgramStore, program_data: dict
-) -> None:
+async def test_ip06_pending_status_run_proceeds(store: ProgramStore, program_data: dict) -> None:
     """IP-06: status=pending → run proceeds (not cached)."""
     from nano_vm_mcp.handlers import GovernedRunProgramHandler
 
@@ -140,21 +138,28 @@ async def test_ip06_pending_status_run_proceeds(
         expires_at=None,
     )
     h = GovernedRunProgramHandler(policy=None)
-    result = await h.handle("run_program", {"program": program_data, "idempotency_key": "key-06"}, store)
+    result = await h.handle(
+        "run_program", {"program": program_data, "idempotency_key": "key-06"}, store
+    )
     import json
+
     data = json.loads(result[0].text)
     # Should have run (not returned cached) — no "cached" marker, has trace_id or error
     assert "cached" not in str(data)
 
 
 @pytest.mark.asyncio
-async def test_ip07_success_status_returns_cached(
-    store: ProgramStore, program_data: dict
-) -> None:
+async def test_ip07_success_status_returns_cached(store: ProgramStore, program_data: dict) -> None:
     """IP-07: status=success → cached result returned without vm.run()."""
     from nano_vm_mcp.handlers import GovernedRunProgramHandler
 
-    cached_result = {"trace_id": "cached-trace", "status": "SUCCESS", "steps": 1, "cost": 0.0, "error": None}
+    cached_result = {
+        "trace_id": "cached-trace",
+        "status": "SUCCESS",
+        "steps": 1,
+        "cost": 0.0,
+        "error": None,
+    }
     store.save_idempotency_key(
         key="key-07",
         execution_id="cached-trace",
@@ -163,23 +168,25 @@ async def test_ip07_success_status_returns_cached(
         expires_at=None,
     )
     h = GovernedRunProgramHandler(policy=None)
-    result = await h.handle("run_program", {"program": program_data, "idempotency_key": "key-07"}, store)
+    result = await h.handle(
+        "run_program", {"program": program_data, "idempotency_key": "key-07"}, store
+    )
     import json
+
     data = json.loads(result[0].text)
     assert data.get("trace_id") == "cached-trace"
     assert data.get("status") == "SUCCESS"
 
 
 @pytest.mark.asyncio
-async def test_ip08_no_idempotency_key_normal_run(
-    store: ProgramStore, program_data: dict
-) -> None:
+async def test_ip08_no_idempotency_key_normal_run(store: ProgramStore, program_data: dict) -> None:
     """IP-08: idempotency_key absent → normal run (backward compat)."""
     from nano_vm_mcp.handlers import GovernedRunProgramHandler
 
     h = GovernedRunProgramHandler(policy=None)
     result = await h.handle("run_program", {"program": program_data}, store)
     import json
+
     data = json.loads(result[0].text)
     # Should run normally — trace_id present or error (no llm configured is ok)
     assert "error" in data or "trace_id" in data
