@@ -345,6 +345,10 @@ Status	Feature	Version
 ✅	`CapabilityRef` + tombstoning — GDPR erasure with hash-chain preservation	v0.3.0	
 ✅	ASTEngine in condition steps — `eval()` removed from production path	v0.3.0	
 ✅	`governance_envelopes` table — append-only SQLite store with execution index	v0.3.0	
+✅	`get_trace` fix — `trace_id` now uses `trace.trace_id` from ExecutionVM (was `uuid4()`)	v0.3.1	
+✅	Trace persistence: FK constraint removed, explicit cascade in `delete_program`	v0.3.1	
+✅	`test_sprint4_trace_persistence.py` — TP-01–06 regression suite	v0.3.1	
+⬜	`idempotency_store` — inter-session exactly-once guarantee	v0.4.0	
 ⬜	`plan_and_run` — intent string → Planner → run	P7	
 ⬜	`POST /mcp/session/{execution_id}/step` — full RFC step lifecycle with `vm.step()`	—	
 ⬜	`RemoteProjectionProvider` — IPC connector to Vault for JIT plaintext access	—	
