@@ -98,6 +98,8 @@ class ProgramStore:
     def delete_program(self, program_id: str) -> bool:
         with self._lock:
             cur = self._con.execute("DELETE FROM programs WHERE id = ?", (program_id,))
+            # Explicit cascade: delete associated traces (no FK after v0.3.1 schema change)
+            self._con.execute("DELETE FROM traces WHERE program_id = ?", (program_id,))
             self._con.commit()
             return cur.rowcount > 0
 
