@@ -1,5 +1,3 @@
-What nano-vm-mcp Is
-
 <p align="center">
   <a href="https://github.com/Ale007XD/nano-vm-mcp/actions">
     <img src="https://github.com/Ale007XD/nano-vm-mcp/actions/workflows/ci.yml/badge.svg" alt="CI">
