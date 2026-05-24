@@ -117,7 +117,9 @@ async def run_program(
         logger.exception("vm_run_failed program_id=%s", program_id)
         return {"error": f"Execution failed: {exc}", "program_id": program_id}
 
-    trace_id = str(uuid.uuid4())
+    # Use trace.trace_id (UUID4 assigned by ExecutionVM, OTel-ready)
+    # Do NOT generate a new uuid4 — get_trace by trace_id would never match.
+    trace_id = str(trace.trace_id) if hasattr(trace, "trace_id") else str(uuid.uuid4())
     trace_dict = trace.model_dump(mode="json") if hasattr(trace, "model_dump") else vars(trace)
     cost = _extract_cost(trace)
 

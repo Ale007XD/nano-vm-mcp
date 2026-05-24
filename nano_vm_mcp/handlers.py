@@ -356,15 +356,17 @@ class GovernedRunProgramHandler(ToolHandler):
             )
 
         # 2. Запуск программы
+        save_as: str = arguments.get("save_as", "")
         result = await _tools.run_program(
             store,
             program_data,
-            arguments.get("save_as", ""),
+            save_as,
         )
 
         trace_id: str | None = result.get("trace_id") if isinstance(result, dict) else None
 
         # 3. TRACE projection + state_context (pre-Sprint4 compat)
+        # Note: save_trace is called inside _tools.run_program (tools.py) — no duplicate needed.
         if trace_id:
             store.save_state_context(
                 trace_id,

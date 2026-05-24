@@ -6,6 +6,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.3.1] — 2026-05-24
+
+### Fixed
+
+- **`trace_id` bug in `tools.py`** — `run_program` was generating a new `uuid.uuid4()` for
+  `trace_id` instead of using `trace.trace_id` from `ExecutionVM`. As a result, `get_trace`
+  via MCP always returned `{"error": "not found"}` because the stored ID never matched the
+  returned ID. Fixed: `trace_id = str(trace.trace_id) if hasattr(trace, "trace_id") else str(uuid.uuid4())`.
+
+- **`FOREIGN KEY` constraint removed from `traces` table** — the FK
+  `traces(program_id) REFERENCES programs(id)` caused `IntegrityError` when `save_trace`
+  was called before a corresponding `save_program` (e.g. on FAILED executions without
+  `save_as`). Traces are now stored independently of programs.  
+  Cascade behaviour preserved explicitly: `delete_program` now issues
+  `DELETE FROM traces WHERE program_id = ?` before the program delete.
+
+- **Duplicate `save_trace` call removed from `handlers.py`** — `GovernedRunProgramHandler`
+  was calling `store.save_trace` in addition to `tools.run_program` which already owns that
+  responsibility. The duplicate call is removed; single ownership restored to `tools.py`.
+
+### Added
+
+- **`tests/test_sprint4_trace_persistence.py`** — 6 regression tests (TP-01–06).  
+  Covers: `save_trace` / `get_trace` round-trip, missing trace returns `None`,
+  `GovernedRunProgramHandler` delegates to `_tools.run_program`, MCP `get_trace` tool,
+  `INSERT OR REPLACE` update semantics, `FAILED` trace persisted correctly.
+
+---
+
 ## [0.3.0] — 2026-05-11
 
 ### Added

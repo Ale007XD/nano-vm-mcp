@@ -32,8 +32,7 @@ def _init_schema(con: sqlite3.Connection) -> None:
             steps_count  INTEGER NOT NULL DEFAULT 0,
             total_cost   REAL NOT NULL DEFAULT 0.0,
             trace_json   TEXT NOT NULL,
-            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-            FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         );
         CREATE TABLE IF NOT EXISTS state_contexts (
             trace_id     TEXT PRIMARY KEY,
@@ -99,6 +98,8 @@ class ProgramStore:
     def delete_program(self, program_id: str) -> bool:
         with self._lock:
             cur = self._con.execute("DELETE FROM programs WHERE id = ?", (program_id,))
+            # Explicit cascade: delete associated traces (no FK after v0.3.1 schema change)
+            self._con.execute("DELETE FROM traces WHERE program_id = ?", (program_id,))
             self._con.commit()
             return cur.rowcount > 0
 
