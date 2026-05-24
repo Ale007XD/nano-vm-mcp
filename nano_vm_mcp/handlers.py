@@ -336,6 +336,7 @@ class GovernedRunProgramHandler(ToolHandler):
 
         program_data = arguments["program"]
         tool_names = self._collect_tools(program_data)
+        idempotency_key: str = arguments.get("idempotency_key", "") or ""
 
         # 1. Capability gate — fail-closed
         denied: list[str] = []
@@ -355,7 +356,23 @@ class GovernedRunProgramHandler(ToolHandler):
                 }
             )
 
-        # 2. Запуск программы
+        # 2. Idempotency check — return cached result if key already succeeded (v0.4.0)
+        if idempotency_key:
+            cached = store.get_idempotency_key(idempotency_key)
+            if cached is not None and cached["status"] == "success":
+                cached_result: dict[str, Any] = cached["result_json"] or {}
+                return _ok(cached_result)
+            # Mark as pending before run (prevents duplicate in-flight requests)
+            if cached is None:
+                store.save_idempotency_key(
+                    key=idempotency_key,
+                    execution_id="",
+                    status="pending",
+                    result=None,
+                    expires_at=None,
+                )
+
+        # 3. Запуск программы
         save_as: str = arguments.get("save_as", "")
         result = await _tools.run_program(
             store,
@@ -365,7 +382,7 @@ class GovernedRunProgramHandler(ToolHandler):
 
         trace_id: str | None = result.get("trace_id") if isinstance(result, dict) else None
 
-        # 3. TRACE projection + state_context (pre-Sprint4 compat)
+        # 4. TRACE projection + state_context (pre-Sprint4 compat)
         # Note: save_trace is called inside _tools.run_program (tools.py) — no duplicate needed.
         if trace_id:
             store.save_state_context(
@@ -378,7 +395,17 @@ class GovernedRunProgramHandler(ToolHandler):
                 },
             )
 
-        # 4. GovernanceEnvelope — строим и сохраняем (Sprint4)
+        # 5. Idempotency key — upsert success after run (v0.4.0)
+        if idempotency_key and trace_id and not result.get("error"):
+            store.save_idempotency_key(
+                key=idempotency_key,
+                execution_id=trace_id,
+                status="success",
+                result=result if isinstance(result, dict) else None,
+                expires_at=None,
+            )
+
+        # 6. GovernanceEnvelope — строим и сохраняем (Sprint4)
         if trace_id and not result.get("error"):
             trace_dict = store.get_trace(trace_id)
             steps_count: int = result.get("steps", 0)
@@ -409,9 +436,9 @@ class GovernedRunProgramHandler(ToolHandler):
 # ---------------------------------------------------------------------------
 
 
-def build_chain() -> ToolHandler:
+def build_chain(policy: PolicySnapshot | None = None) -> ToolHandler:
     """Construct and return the head of the tool-dispatch chain."""
-    head = RunProgramHandler()
+    head: ToolHandler = GovernedRunProgramHandler(policy=policy)
     head.set_successor(GetTraceHandler()).set_successor(ListProgramsHandler()).set_successor(
         GetProgramHandler()
     ).set_successor(DeleteProgramHandler()).set_successor(UnknownToolHandler())
