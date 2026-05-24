@@ -14,24 +14,21 @@ TP-06  повторный save_trace (INSERT OR REPLACE) → обновляет 
 from __future__ import annotations
 
 import json
-import tempfile
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from nano_vm_mcp.store import ProgramStore
 from nano_vm_mcp.handlers import (
-    GovernedRunProgramHandler,
-    RunProgramHandler,
     GetTraceHandler,
-    build_chain,
+    GovernedRunProgramHandler,
 )
-
+from nano_vm_mcp.store import ProgramStore
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def store(tmp_path) -> ProgramStore:
@@ -51,6 +48,7 @@ def _make_result(trace_id: str = "trace-123", status: str = "SUCCESS") -> dict[s
 # ---------------------------------------------------------------------------
 # TP-01: save_trace + get_trace round-trip
 # ---------------------------------------------------------------------------
+
 
 def test_tp_01_save_and_get_trace(store: ProgramStore) -> None:
     trace_data = _make_result("t-001")
@@ -73,6 +71,7 @@ def test_tp_01_save_and_get_trace(store: ProgramStore) -> None:
 # TP-02: get_trace несуществующего trace_id → None
 # ---------------------------------------------------------------------------
 
+
 def test_tp_02_get_trace_missing(store: ProgramStore) -> None:
     assert store.get_trace("nonexistent") is None
 
@@ -80,6 +79,7 @@ def test_tp_02_get_trace_missing(store: ProgramStore) -> None:
 # ---------------------------------------------------------------------------
 # TP-03: GovernedRunProgramHandler сохраняет трейс
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tp_03_governed_handler_calls_run_program(store: ProgramStore) -> None:
@@ -101,6 +101,7 @@ async def test_tp_03_governed_handler_calls_run_program(store: ProgramStore) -> 
     mock_run.assert_called_once()
     # result propagated correctly
     import json as _json
+
     payload = _json.loads(result[0].text)
     assert payload["trace_id"] == trace_id
     assert payload["status"] == "SUCCESS"
@@ -109,6 +110,7 @@ async def test_tp_03_governed_handler_calls_run_program(store: ProgramStore) -> 
 # ---------------------------------------------------------------------------
 # TP-04: get_trace через MCP-инструмент возвращает сохранённый трейс
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tp_04_get_trace_mcp_tool(store: ProgramStore) -> None:
@@ -137,6 +139,7 @@ async def test_tp_04_get_trace_mcp_tool(store: ProgramStore) -> None:
 # TP-05: повторный save_trace → INSERT OR REPLACE обновляет запись
 # ---------------------------------------------------------------------------
 
+
 def test_tp_05_save_trace_replace(store: ProgramStore) -> None:
     store.save_trace("t-005", "p-005", "RUNNING", 1, 0.0, {"status": "RUNNING"})
     store.save_trace("t-005", "p-005", "SUCCESS", 3, 0.001, {"status": "SUCCESS", "steps": 3})
@@ -150,6 +153,7 @@ def test_tp_05_save_trace_replace(store: ProgramStore) -> None:
 # ---------------------------------------------------------------------------
 # TP-06: trace сохраняется даже при статусе FAILED
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tp_06_tools_save_trace_called_on_run(store: ProgramStore) -> None:
