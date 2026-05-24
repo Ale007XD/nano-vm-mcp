@@ -32,8 +32,7 @@ def _init_schema(con: sqlite3.Connection) -> None:
             steps_count  INTEGER NOT NULL DEFAULT 0,
             total_cost   REAL NOT NULL DEFAULT 0.0,
             trace_json   TEXT NOT NULL,
-            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-            FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         );
         CREATE TABLE IF NOT EXISTS state_contexts (
             trace_id     TEXT PRIMARY KEY,
