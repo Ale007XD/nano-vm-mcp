@@ -6,6 +6,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.4.0] — 2026-05-25
+
+### Added
+
+- **`idempotency_keys` table** in SQLite WAL store.
+  Schema: `(idempotency_key TEXT PK, status TEXT, result_json TEXT, created_at TEXT, updated_at TEXT)`.
+  New store methods: `save_idempotency_key`, `get_idempotency_key`, `delete_idempotency_key`.
+  Status lifecycle: `pending` → `success` (upserted on completion).
+
+- **Idempotency flow in `GovernedRunProgramHandler._try_handle`** — before execution the
+  handler checks for a cached result by `idempotency_key`. If found with `status=success`,
+  the cached MCP response is returned immediately without re-running the program.
+  If `status=pending` (crash mid-flight), the entry is overwritten and execution proceeds.
+  On success, the result is upserted with `status=success`.
+
+- **`idempotency_key` parameter in `tools.run_program`** — optional string. When provided,
+  the full idempotency flow is activated. When omitted, behaviour is unchanged (no-op).
+
+- **`build_chain()` now uses `GovernedRunProgramHandler`** — previously `build_chain` wired
+  `RunProgramHandler` directly, bypassing the capability gate. Fixed: `GovernedRunProgramHandler`
+  (with `policy=None`) is now the head of the chain.
+
+- **`tests/test_sprint4_idempotency.py`** — 10 tests (IP-01–IP-10) using `asyncio.run`
+  wrappers (no `pytest-asyncio` dependency). Covers: cache hit on second call, `pending`
+  crash recovery, idempotency key absent (passthrough), distinct keys execute independently,
+  `status=pending` upsert, FAILED trace does not cache, `delete_idempotency_key` cleanup,
+  concurrent-safe sequential calls, `GovernedRunProgramHandler` integration, store round-trip.
+
+### Fixed
+
+- **`build_chain()` capability gate bypass** — `RunProgramHandler` was used instead of
+  `GovernedRunProgramHandler`, meaning tool capability enforcement was silently skipped for
+  all MCP `run_program` calls. Fixed: `GovernedRunProgramHandler(policy=None)` is now
+  always the entry point.
+
+---
+
 ## [0.3.1] — 2026-05-24
 
 ### Fixed
