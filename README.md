@@ -5,31 +5,45 @@
   <a href="https://pypi.org/project/nano-vm-mcp/">
     <img src="https://img.shields.io/pypi/v/nano-vm-mcp" alt="PyPI">
   </a>
-  <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT">
   <img src="https://img.shields.io/badge/MCP-compatible-purple" alt="MCP">
-</p><p align="center">
+  <img src="https://img.shields.io/badge/FSM-deterministic-orange" alt="Deterministic FSM">
+  <img src="https://img.shields.io/badge/audit-append--only-red" alt="Audit Trail">
+  <img src="https://img.shields.io/badge/GDPR-tombstoning-blueviolet" alt="GDPR">
+</p>
 
-nano-vm-mcp is a stateful MCP gateway built on top of [nano-vm](https://github.com/Ale007XD/nano_vm). It exposes deterministic execution workflows through the [Model Context Protocol](https://modelcontextprotocol.io/) ecosystem.
+<p align="center">
+  <strong>Stateful MCP gateway for deterministic LLM workflows.</strong><br>
+  Governance-first. Replayable. Audit-complete.<br>
+  Built on <a href="https://github.com/Ale007XD/nano_vm">llm-nano-vm</a> — the deterministic FSM execution kernel.
+</p>
 
-Unlike typical MCP servers that only expose stateless tools, nano-vm-mcp provides:
+---
 
-Capability	Typical MCP Server	nano-vm-mcp	
-Tool execution	✅	✅	
-Stateful workflows	❌	✅	
-Deterministic FSM	❌	✅	
-Replayable traces	❌	✅	
-Suspend/resume	❌	✅	
-Governance layer	❌	✅	
-Capability enforcement	❌	✅	
-Audit trail	partial	append-only	
+## What nano-vm-mcp Is
 
-Core principle: The gateway does not control execution logic — the deterministic FSM runtime does.
+nano-vm-mcp is an **MCP gateway** that turns the [Model Context Protocol](https://modelcontextprotocol.io/) into a governance-bound execution environment. It wraps the `llm-nano-vm` execution kernel and exposes it to any MCP client — Claude Desktop, custom agents, or API callers — through stdio or SSE transport.
+
+**Most MCP servers expose stateless tools.** nano-vm-mcp exposes stateful, governed, auditable workflows.
+
+| Capability | Typical MCP Server | nano-vm-mcp |
+| :--- | :---: | :---: |
+| Tool execution | ✅ | ✅ |
+| Stateful workflows | ❌ | ✅ |
+| Deterministic FSM | ❌ | ✅ |
+| Replayable traces | ❌ | ✅ |
+| Suspend / resume | ❌ | ✅ |
+| Capability enforcement | ❌ | ✅ |
+| Append-only audit trail | ❌ | ✅ |
+| GDPR tombstoning | ❌ | ✅ |
+| Inter-session idempotency | ❌ | ✅ |
+
+**Core invariant:** the gateway does not own execution logic — the FSM kernel does.
 
 ```
 δ(S, E) → S'
 
-Where:
   S  — current execution state
   E  — validated event
   S' — next deterministic state
@@ -37,27 +51,28 @@ Where:
 
 ---
 
-Architecture
+## Architecture
 
 ```
 MCP Client
   → nano-vm-mcp (Gateway)
-      → GovernedRunProgramHandler   ← PolicySnapshot, CapabilityRef resolution
+      → GovernedRunProgramHandler   ← PolicySnapshot, idempotency_key, CapabilityRef resolution
           → llm-nano-vm (Kernel)    ← deterministic FSM, ASTEngine, ProjectionLayer
       → GovernanceEnvelope store    ← SQLite WAL, append-only audit log
+      → idempotency_keys store      ← inter-session exactly-once guarantee
 ```
 
-The gateway and kernel are strictly isolated: the gateway never touches execution logic, the kernel never touches persistence or policy.
+**Strict isolation:** the gateway never touches execution logic. The kernel never touches persistence or policy. Each layer has a single responsibility and cannot cross the boundary.
 
 ---
 
-Install
+## Install
 
 ```bash
 pip install nano-vm-mcp
 ```
 
-For programs with `llm` steps, install the LiteLLM extra:
+For programs with `llm` steps:
 
 ```bash
 pip install 'nano-vm-mcp[litellm]'
@@ -65,9 +80,21 @@ pip install 'nano-vm-mcp[litellm]'
 
 ---
 
-Quick Start
+## MCP Tools
 
-stdio transport — Claude Desktop / local MCP client
+| Tool | Description |
+| :--- | :--- |
+| `run_program` | Execute a `Program` dict → returns `trace_id`, status, step count, cost |
+| `get_trace` | Retrieve full `Trace` JSON by `trace_id` |
+| `list_programs` | List saved programs (`id`, `name`, `created_at`) |
+| `get_program` | Retrieve saved `Program` JSON by `program_id` |
+| `delete_program` | Delete a program and all its traces |
+
+---
+
+## Quick Start
+
+### stdio — Claude Desktop / local MCP client
 
 ```bash
 nano-vm-mcp --transport stdio
@@ -86,17 +113,16 @@ nano-vm-mcp --transport stdio
 }
 ```
 
-SSE transport — VPS / remote clients
+### SSE — VPS / remote clients
 
 ```bash
 NANO_VM_MCP_API_KEY=your-secret-token nano-vm-mcp --transport sse --port 8080
 ```
 
-MCP client URL: `http://<<host>:8080/sse`
+MCP client URL: `http://<host>:8080/sse`  
+Auth header: `Authorization: Bearer your-secret-token`
 
-With auth header: `Authorization: Bearer your-secret-token`
-
-Docker Compose
+### Docker Compose
 
 ```yaml
 services:
@@ -115,7 +141,7 @@ services:
 
 ---
 
-Configuration
+## Configuration
 
 Copy `.env.example` to `.env`:
 
@@ -123,64 +149,60 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Variable	Default	Description	
-`NANO_VM_MCP_DB`	`nano_vm_mcp.db`	SQLite WAL database path	
-`NANO_VM_MCP_HOST`	`0.0.0.0`	SSE bind host	
-`NANO_VM_MCP_PORT`	`8080`	SSE bind port	
-`NANO_VM_MCP_API_KEY`	(unset)	Bearer token for SSE auth. If unset, all requests are allowed (warning logged)	
-`NANO_VM_MCP_LLM_MODEL`	(unset)	LiteLLM model string for `llm` steps (e.g. `openrouter/meta-llama/llama-3.3-70b-instruct:free`)	
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `NANO_VM_MCP_DB` | `nano_vm_mcp.db` | SQLite WAL database path |
+| `NANO_VM_MCP_HOST` | `0.0.0.0` | SSE bind host |
+| `NANO_VM_MCP_PORT` | `8080` | SSE bind port |
+| `NANO_VM_MCP_API_KEY` | _(unset)_ | Bearer token for SSE auth. If unset, all requests are allowed (warning logged) |
+| `NANO_VM_MCP_LLM_MODEL` | _(unset)_ | LiteLLM model string for `llm` steps (e.g. `openrouter/meta-llama/llama-3.3-70b-instruct:free`) |
 
 ---
 
-Endpoints
+## Endpoints
 
-Path	Auth	Description	
-`GET /health`	none	Liveness probe — always returns `{"status": "ok"}`	
-`GET /sse`	bearer	SSE transport entry point	
-`POST /messages`	bearer	MCP message endpoint	
-
----
-
-MCP Tools
-
-Tool	Description	
-`run_program`	Execute a `Program` dict → returns `trace_id`, status, step count, cost	
-`get_trace`	Retrieve full `Trace` JSON by `trace_id`	
-`list_programs`	List saved programs (`id`, `name`, `created_at`)	
-`get_program`	Retrieve saved `Program` JSON by `program_id`	
-`delete_program`	Delete a program and all its traces	
+| Path | Auth | Description |
+| :--- | :--- | :--- |
+| `GET /health` | none | Liveness probe — always returns `{"status": "ok"}` |
+| `GET /sse` | bearer | SSE transport entry point |
+| `POST /messages` | bearer | MCP message endpoint |
 
 ---
 
-Example: Run a Workflow
+## Example: Run a Workflow
 
-Without LLMs — Payment Pipeline
+### Payment pipeline — no LLM
 
 ```python
 program = {
     "name": "payment_flow",
     "steps": [
-        {"id": "reserve", "type": "tool", "tool": "reserve_funds"},
-        {"id": "capture", "type": "tool", "tool": "capture_payment"},
-        {"id": "receipt", "type": "tool", "tool": "send_receipt"}
+        {"id": "reserve",  "type": "tool", "tool": "reserve_funds"},
+        {"id": "capture",  "type": "tool", "tool": "capture_payment"},
+        {"id": "receipt",  "type": "tool", "tool": "send_receipt"},
     ]
 }
 ```
 
-Execution properties: deterministic ordering, replayable trace, exactly-once semantics, append-only audit trail. No LLM involved.
+No LLM. The gateway still guarantees: deterministic ordering, replayable trace, exactly-once semantics, append-only audit trail.
 
-Async Suspend / Resume
+### Async suspend / resume
+
+Return the sentinel `"PENDING"` from any tool to suspend execution:
 
 ```python
-async def wait_bank_transfer(**kwargs):
-    return "PENDING"
+async def wait_bank_transfer(**kwargs) -> str:
+    await register_webhook(kwargs["order_id"])
+    return "PENDING"   # FSM → SUSPENDED, cursor persisted
 ```
 
 FSM lifecycle: `RUNNING → SUSPENDED → RUNNING → SUCCESS`
 
-This enables webhook orchestration, payment confirmation flows, human approvals, and long-running workflows.
+This enables: payment settlement, courier confirmation, approval workflows, webhook orchestration, human-in-the-loop.
 
-Through MCP (SSE)
+> **Note:** `"PENDING"` is a reserved FSM sentinel. Use `"REQUIRES_ACTION"`, `"AWAITING_3DS"`, or any other string for domain-specific states.
+
+### Through MCP (SSE)
 
 ```python
 import asyncio
@@ -201,7 +223,11 @@ async def main():
             await session.initialize()
             result = await session.call_tool(
                 "run_program",
-                {"program": program, "save_as": "demo"}
+                {
+                    "program": program,
+                    "save_as": "demo",
+                    "idempotency_key": "order-abc-123",   # inter-session exactly-once
+                }
             )
             print(result.content[0].text)
 
@@ -210,170 +236,183 @@ asyncio.run(main())
 
 ---
 
-Deterministic Execution Guarantees
+## Idempotency — Inter-session Exactly-Once
 
-Guarantee	nano-vm-mcp	
-Replayable traces	✅	
-Deterministic transitions	✅	
-Exactly-once execution	✅	
-Suspend/resume	✅	
-Auditability	✅	
-Capability enforcement	✅	
-Governance enforcement	✅	
+Pass `idempotency_key` to `run_program` to guarantee that a program executes at most once per key, even across process restarts:
+
+```python
+# First call — executes normally, result cached as "success"
+result = await session.call_tool("run_program", {
+    "program": program,
+    "idempotency_key": "payment-order-xyz-001",
+})
+
+# Second call with same key — returns cached result immediately, no re-execution
+result = await session.call_tool("run_program", {
+    "program": program,
+    "idempotency_key": "payment-order-xyz-001",
+})
+```
+
+**Crash recovery:** if the process crashes after program start but before completion (`status=pending`), the next call with the same key overwrites the pending entry and re-executes. Once the result is written as `status=success`, it is immutable for that key.
+
+This closes the inter-session duplicate risk that exists when a process restarts after creating a payment but before confirming it.
 
 ---
 
-State Model
+## Governance Layer
 
-Execution lifecycle:
+### GovernanceEnvelope
 
-```
-CREATED
-  ↓
-RUNNING
-  ↓
-SUSPENDED
-  ↓
-RUNNING
-  ↓
-SUCCESS / FAILED
-```
+Each successful execution step produces an immutable `GovernanceEnvelope` stored in the `governance_envelopes` table:
 
-Terminal states are immutable.
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `execution_id` | `str` | Session / trace identifier |
+| `step_id` | `int` | Step index within the execution |
+| `policy_hash` | `str` | SHA-256 of the active `PolicySnapshot` |
+| `canonical_snapshot_hash` | `str` | Merkle/delta hash of `CanonicalState` at this step |
+| `payload` | `dict \| list` | Projected (sanitized) step output |
 
----
+Envelopes are written only on `error=None` — they form a tamper-evident, append-only audit trail of successful transitions only.
 
-Governance Layer
-
-GovernanceEnvelope
-
-Each successful execution step produces an immutable `GovernanceEnvelope`:
-
-Field	Type	Description	
-`execution_id`	`str`	Session / trace identifier	
-`step_id`	`int`	Step index within the execution	
-`policy_hash`	`str`	SHA-256 of the active `PolicySnapshot`	
-`canonical_snapshot_hash`	`str`	Merkle/delta hash of `CanonicalState` at this step	
-`payload`	`dict \| list`	Projected (sanitized) step output	
-
-Envelopes are written only on `error=None` — they form a tamper-evident audit trail of successful transitions.
-
-CapabilityRef and GDPR Tombstoning
+### CapabilityRef and GDPR Tombstoning
 
 Sensitive values in `CanonicalState` are stored as `CapabilityRef` tokens (`vault://secret/<id>`) rather than raw plaintext.
 
-On erasure event (`E_gdpr_erase`):
+On a GDPR erasure event (`E_gdpr_erase`):
+
 - Target ref is tombstoned (`is_tombstone=True`)
-- Projected values become `[REDACTED_TOMBSTONE]`
-- Hash chain remains valid
-- Secret disappears
+- All subsequent projections return `[REDACTED_TOMBSTONE]`
+- The `canonical_snapshot_hash` chain remains valid
+- The secret is permanently gone
+
+This preserves forensic auditability without retaining erased personal data.
 
 ---
 
-Security
+## Security
 
-AST-safe Conditions
+### Condition expressions — ASTEngine
 
-Condition expressions are evaluated through the deterministic ASTEngine — a sandboxed interpreter built into `llm-nano-vm`. `eval()` is never used.
+`run_program` accepts a full `Program` dict including `condition` steps with expression strings. These are evaluated by the **ASTEngine** — a deterministic sandboxed interpreter with no access to Python builtins, attribute access, or callable invocation.
 
-Supported operators: `==`, `!=`, `>`, `<`, `in`, `not in`, `and`, `or`, `not`, `contains`
+Supported operators: `==`, `!=`, `>`, `<`, `in`, `not in`, `and`, `or`, `not`, `contains`, dotted-path `$var.field`.
 
-Rules for safe use:
+`eval()` is not used anywhere in the production execution path.
+
+**Rules for safe use:**
+
 - Condition logic must be authored by you, not generated from untrusted input at runtime.
-- LLM output may appear as a value being tested (`'yes' in '$decision'`), never as the condition expression itself.
-- If you expose this MCP server to untrusted clients, validate or allowlist condition expressions before passing them to `run_program`.
+- LLM output may appear as a *value being tested* (`'yes' in '$decision'`), never as the condition expression itself.
+- If you expose this server to untrusted clients, validate or allowlist condition expressions before passing them to `run_program`.
 
-Capability Verification
+### Capability enforcement — double gate
 
-Two independent enforcement layers:
+Tool execution passes through two independent enforcement layers:
 
-Layer	Responsibility	
-`ExecutionVM`	Registered tool validation — rejects unregistered tools with `VMError`	
-`GovernedToolExecutor`	Policy capability validation — rejects unauthorized tools with `CapabilityDeniedError`	
+| Layer | Mechanism |
+| :--- | :--- |
+| `GovernedToolExecutor` | Verifies tool name against `PolicySnapshot.tool_capabilities`; raises `CapabilityDeniedError` on violation |
+| `ExecutionVM` (kernel) | Rejects any tool name not registered in the tool registry with `VMError` |
+
+Neither gate can be bypassed by LLM output. A tool not listed in the policy is never silently executed.
 
 Avoid registering destructive or privileged tools (filesystem writes, shell exec, database mutations) without an explicit access control layer in your tool implementation.
 
-SSE Transport and Auth
+### SSE transport and auth
 
-Set `NANO_VM_MCP_API_KEY` to enable bearer token authentication. The comparison is timing-safe (`secrets.compare_digest`).
+Set `NANO_VM_MCP_API_KEY` to enable bearer token authentication. The comparison is timing-safe (`secrets.compare_digest`). If unset, a warning is logged and all requests are allowed — suitable for localhost only.
 
-Do not expose the SSE endpoint to the public internet without `NANO_VM_MCP_API_KEY` set or behind a reverse proxy with auth (nginx, Cloudflare Access, VPN).
+**Do not expose the SSE endpoint to the public internet without `NANO_VM_MCP_API_KEY` set** or behind a reverse proxy with auth (nginx, Cloudflare Access, VPN).
 
 ---
 
-Observability
+## Observability
 
 Every execution exposes:
 
 ```python
-trace.trace_id
-trace.status
-trace.steps
-trace.error
-trace.state_snapshots
+trace.trace_id          # UUID4 — stable for OTel propagation
+trace.status            # SUCCESS | FAILED | SUSPENDED | BUDGET_EXCEEDED | STALLED
+trace.final_output
+trace.steps             # per-step: step_id, status, duration_ms, usage
+trace.state_snapshots   # list[(step_index, sha256_hex)]
 ```
 
-Execution becomes replayable and inspectable.
+Traces are persisted to SQLite and retrievable by `trace_id` across sessions via `get_trace`.
 
 ---
 
-Relationship to nano-vm
+## Execution State Model
 
-Layer	Responsibility	
-`nano-vm`	Deterministic execution kernel	
-`nano-vm-mcp`	Stateful MCP gateway	
+```
+CREATED
+  ↓
+RUNNING ──── tool returns "PENDING" ──→ SUSPENDED
+  │                                          │
+  │                                    resume_with_program()
+  │                                          │
+  └──────────────────────────────────────────┘
+  │
+  ├── no more steps ──→ SUCCESS
+  ├── tool error (on_error=fail) ──→ FAILED
+  ├── max_steps / max_tokens exceeded ──→ BUDGET_EXCEEDED
+  └── max_stalled_steps exceeded ──→ STALLED
+```
+
+Terminal states: `SUCCESS`, `FAILED`, `BUDGET_EXCEEDED`, `STALLED`. All are immutable.
+
+---
+
+## Relationship to nano-vm
+
+| Layer | Responsibility |
+| :--- | :--- |
+| `llm-nano-vm` (kernel) | Deterministic FSM execution, ASTEngine, ProjectionLayer, step lifecycle |
+| `nano-vm-mcp` (gateway) | MCP transport, persistence, governance, idempotency, capability enforcement |
 
 The gateway never owns transition logic. The FSM kernel does.
 
 ---
 
-Use Cases
+## Roadmap
 
-- Fintech orchestration
-- Payment systems
-- Governance-bound AI
-- Enterprise automation
-- Async approval workflows
-- Webhook pipelines
-- Deterministic AI execution
-- MCP-native workflow systems
-
----
-
-Roadmap
-
-Status	Feature	Version	
-✅	`run_program`, `get_trace`, `list_programs`, `get_program`, `delete_program`	v0.1.0	
-✅	stdio + SSE transports	v0.1.0	
-✅	SQLite WAL persistence	v0.1.0	
-✅	Bearer token auth for SSE — `NANO_VM_MCP_API_KEY`, timing-safe	v0.1.0	
-✅	`/health` liveness endpoint	v0.1.0	
-✅	Structured error responses + logging	v0.1.0	
-✅	`GovernanceEnvelope` — immutable audit trail per execution step	v0.3.0	
-✅	`GovernedRunProgramHandler` + `GovernedToolExecutor` + `CapabilityDeniedError`	v0.3.0	
-✅	`PolicySnapshot` CRUD — capability-gated tool execution	v0.3.0	
-✅	`CapabilityRef` + tombstoning — GDPR erasure with hash-chain preservation	v0.3.0	
-✅	ASTEngine in condition steps — `eval()` removed from production path	v0.3.0	
-✅	`governance_envelopes` table — append-only SQLite store with execution index	v0.3.0	
-✅	`get_trace` fix — `trace_id` now uses `trace.trace_id` from ExecutionVM (was `uuid4()`)	v0.3.1	
-✅	Trace persistence: FK constraint removed, explicit cascade in `delete_program`	v0.3.1	
-✅	`test_sprint4_trace_persistence.py` — TP-01–06 regression suite	v0.3.1	
-⬜	`idempotency_store` — inter-session exactly-once guarantee	v0.4.0	
-⬜	`plan_and_run` — intent string → Planner → run	P7	
-⬜	`POST /mcp/session/{execution_id}/step` — full RFC step lifecycle with `vm.step()`	—	
-⬜	`RemoteProjectionProvider` — IPC connector to Vault for JIT plaintext access	—	
-⬜	Docker image to GHCR	—	
+| Status | Feature | Version |
+| :---: | :--- | :--- |
+| ✅ | `run_program`, `get_trace`, `list_programs`, `get_program`, `delete_program` | v0.1.0 |
+| ✅ | stdio + SSE transports | v0.1.0 |
+| ✅ | SQLite WAL persistence | v0.1.0 |
+| ✅ | Bearer token auth — `NANO_VM_MCP_API_KEY`, timing-safe | v0.1.0 |
+| ✅ | `/health` liveness endpoint | v0.1.0 |
+| ✅ | Structured error responses + logging | v0.1.0 |
+| ✅ | `GovernanceEnvelope` — immutable audit trail per execution step | v0.3.0 |
+| ✅ | `GovernedRunProgramHandler` + `GovernedToolExecutor` + `CapabilityDeniedError` | v0.3.0 |
+| ✅ | `PolicySnapshot` CRUD — capability-gated tool execution | v0.3.0 |
+| ✅ | `CapabilityRef` + tombstoning — GDPR erasure with hash-chain preservation | v0.3.0 |
+| ✅ | ASTEngine in condition steps — `eval()` removed from production path | v0.3.0 |
+| ✅ | `governance_envelopes` table — append-only SQLite store | v0.3.0 |
+| ✅ | `trace_id` fix — uses `trace.trace_id` from `ExecutionVM` | v0.3.1 |
+| ✅ | Trace persistence: FK constraint removed, explicit cascade in `delete_program` | v0.3.1 |
+| ✅ | `idempotency_store` — inter-session exactly-once guarantee | v0.4.0 |
+| ✅ | `build_chain()` → `GovernedRunProgramHandler` — capability gate always active | v0.4.0 |
+| ⬜ | `PROGRAM_IPN_HANDLER` DSL — webhook confirmation path | — |
+| ⬜ | `GovernedToolExecutor` circuit breaker — degradation isolation | — |
+| ⬜ | `POST /mcp/session/{execution_id}/step` — full RFC step lifecycle | — |
+| ⬜ | `RemoteProjectionProvider` — IPC connector to Vault for JIT plaintext access | — |
+| ⬜ | `plan_and_run` — intent string → Planner → run | — |
+| ⬜ | Docker image to GHCR | — |
 
 ---
 
-Contact
+## License
 
-- nano-vm-mcp GitHub Repository: https://github.com/Ale007XD/nano-vm-mcp
-- Kernel Runtime (nano-vm): https://github.com/Ale007XD/nano_vm
-- PyPI: https://pypi.org/project/nano-vm-mcp/
+[MIT License](LICENSE)
 
 ---
 
-License
+## Contact
 
-MIT License
+- **Kernel runtime:** [nano-vm](https://github.com/Ale007XD/nano_vm)  
+- **Telegram:** [@ale007xd](https://t.me/ale007xd)  
+- **X:** [@ale007xd](https://x.com/ale007xd)
