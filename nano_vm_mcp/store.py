@@ -50,6 +50,14 @@ def _init_schema(con: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_gov_envelopes_execution_id
             ON governance_envelopes (execution_id);
+        CREATE TABLE IF NOT EXISTS idempotency_keys (
+            idempotency_key TEXT PRIMARY KEY,
+            execution_id    TEXT NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            result_json     TEXT,
+            created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+            expires_at      TEXT
+        );
     """)
     con.commit()
 
@@ -235,3 +243,73 @@ class ProgramStore:
             )
             self._con.commit()
             return cur.rowcount
+
+    # ------------------------------------------------------------------
+    # IdempotencyKeys — exactly-once guarantee (v0.4.0)
+    # ------------------------------------------------------------------
+
+    def save_idempotency_key(
+        self,
+        key: str,
+        execution_id: str,
+        status: str,
+        result: dict[str, Any] | None,
+        expires_at: str | None,
+    ) -> None:
+        """
+        INSERT OR REPLACE — upsert idempotency key record.
+
+        Args:
+            key:          Unique idempotency key from the caller.
+            execution_id: Associated trace/execution identifier.
+            status:       'pending' | 'success' | etc.
+            result:       Execution result dict (stored as JSON) or None.
+            expires_at:   Optional ISO-8601 expiration timestamp.
+        """
+        result_json: str | None = json.dumps(result) if result is not None else None
+        with self._lock:
+            self._con.execute(
+                """INSERT OR REPLACE INTO idempotency_keys
+                       (idempotency_key, execution_id, status, result_json, expires_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (key, execution_id, status, result_json, expires_at),
+            )
+            self._con.commit()
+
+    def get_idempotency_key(self, key: str) -> dict[str, Any] | None:
+        """
+        Возвращает запись idempotency key или None если не найдена.
+
+        Returns:
+            dict with fields: idempotency_key, execution_id, status,
+            result_json (parsed as dict or None), created_at, expires_at.
+        """
+        row = self._con.execute(
+            """SELECT idempotency_key, execution_id, status, result_json,
+                      created_at, expires_at
+               FROM idempotency_keys
+               WHERE idempotency_key = ?""",
+            (key,),
+        ).fetchone()
+        if row is None:
+            return None
+        result_raw: str | None = row["result_json"]
+        return {
+            "idempotency_key": row["idempotency_key"],
+            "execution_id": row["execution_id"],
+            "status": row["status"],
+            "result_json": json.loads(result_raw) if result_raw is not None else None,
+            "created_at": row["created_at"],
+            "expires_at": row["expires_at"],
+        }
+
+    def delete_idempotency_key(self, key: str) -> bool:
+        """
+        Удаляет idempotency key. Возвращает True если запись существовала.
+        """
+        with self._lock:
+            cur = self._con.execute(
+                "DELETE FROM idempotency_keys WHERE idempotency_key = ?", (key,)
+            )
+            self._con.commit()
+            return cur.rowcount > 0

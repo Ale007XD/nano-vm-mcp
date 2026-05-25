@@ -82,6 +82,7 @@ async def run_program(
     store: ProgramStore,
     program_data: dict[str, Any],
     save_as: str = "",
+    idempotency_key: str = "",
 ) -> dict[str, Any]:
     """
     Validate and execute a Program dict.
@@ -90,6 +91,7 @@ async def run_program(
         store: ProgramStore instance.
         program_data: Raw dict conforming to nano_vm.Program schema.
         save_as: Optional name to persist the program in the store.
+        idempotency_key: Optional key for exactly-once execution guarantee (v0.4.0).
 
     Returns:
         {"trace_id": str, "program_id": str, "status": str,
