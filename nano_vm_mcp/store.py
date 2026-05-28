@@ -58,6 +58,17 @@ def _init_schema(con: sqlite3.Connection) -> None:
             created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
             expires_at      TEXT
         );
+        CREATE TABLE IF NOT EXISTS execution_traces (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            execution_id    TEXT    NOT NULL,
+            step_index      INTEGER NOT NULL,
+            step_id         TEXT    NOT NULL,
+            projected_json  TEXT    NOT NULL,
+            canonical_hash  TEXT    NOT NULL,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_exec_traces_execution_id
+            ON execution_traces (execution_id);
     """)
     con.commit()
 
@@ -243,6 +254,49 @@ class ProgramStore:
             )
             self._con.commit()
             return cur.rowcount
+
+    # ------------------------------------------------------------------
+    # ExecutionTraces — TRACE projection logging (v0.4.1)
+    # ------------------------------------------------------------------
+
+    def save_trace_step(
+        self,
+        execution_id: str,
+        step_index: int,
+        step_id: str,
+        projected: dict[str, Any],
+        canonical_hash: str,
+    ) -> int:
+        with self._lock:
+            cur = self._con.execute(
+                """INSERT INTO execution_traces
+                       (execution_id, step_index, step_id, projected_json, canonical_hash)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (execution_id, step_index, step_id, json.dumps(projected), canonical_hash),
+            )
+            self._con.commit()
+            return cur.lastrowid  # type: ignore[return-value]
+
+    def get_trace_steps(self, execution_id: str) -> list[dict[str, Any]]:
+        rows = self._con.execute(
+            """SELECT execution_id, step_index, step_id, projected_json,
+                      canonical_hash, created_at
+               FROM execution_traces
+               WHERE execution_id = ?
+               ORDER BY step_index""",
+            (execution_id,),
+        ).fetchall()
+        return [
+            {
+                "execution_id": r["execution_id"],
+                "step_index": r["step_index"],
+                "step_id": r["step_id"],
+                "projected": json.loads(r["projected_json"]),
+                "canonical_hash": r["canonical_hash"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
 
     # ------------------------------------------------------------------
     # IdempotencyKeys — exactly-once guarantee (v0.4.0)
