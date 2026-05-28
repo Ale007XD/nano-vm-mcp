@@ -428,6 +428,21 @@ class GovernedRunProgramHandler(ToolHandler):
                 else list(envelope.payload),
             )
 
+            # 7. TRACE projection logging — persist per-execution audit record (v0.4.1)
+            store.save_trace_step(
+                execution_id=trace_id,
+                step_index=0,
+                step_id="run_program",
+                projected={
+                    "trace_id": trace_id,
+                    "status": result.get("status"),
+                    "steps": result.get("steps", 0),
+                    "cost": result.get("cost", 0.0),
+                    "projection_target": "TRACE",
+                },
+                canonical_hash=envelope.canonical_snapshot_hash,
+            )
+
         return _ok(result)
 
 

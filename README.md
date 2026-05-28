@@ -396,6 +396,7 @@ The gateway never owns transition logic. The FSM kernel does.
 | ✅ | Trace persistence: FK constraint removed, explicit cascade in `delete_program` | v0.3.1 |
 | ✅ | `idempotency_store` — inter-session exactly-once guarantee | v0.4.0 |
 | ✅ | `build_chain()` → `GovernedRunProgramHandler` — capability gate always active | v0.4.0 |
+| ✅ | TRACE projection logging to SQLite — `execution_traces` table + `save_trace_step`/`get_trace_steps` | v0.4.1 |
 | ⬜ | `PROGRAM_IPN_HANDLER` DSL — webhook confirmation path | — |
 | ⬜ | `GovernedToolExecutor` circuit breaker — degradation isolation | — |
 | ⬜ | `POST /mcp/session/{execution_id}/step` — full RFC step lifecycle | — |

@@ -6,6 +6,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.4.1] — 2026-05-28
+
+### Added
+
+- **`execution_traces` table** in SQLite WAL store.
+  Schema: `(id INTEGER PK AUTOINCREMENT, execution_id TEXT, step_index INTEGER, step_id TEXT,
+  projected_json TEXT, canonical_hash TEXT, created_at TEXT)` + index on `execution_id`.
+  New store methods: `save_trace_step`, `get_trace_steps`.
+
+- **TRACE projection logging in `GovernedRunProgramHandler._try_handle`** — after each
+  successful `run_program`, a TRACE-projected record is written to `execution_traces`.
+  The record carries `trace_id`, `status`, `steps`, `cost`, `projection_target="TRACE"`,
+  and `canonical_snapshot_hash` from the `GovernanceEnvelope`. Written only on `error=None`,
+  same invariant as `governance_envelopes`. This closes the gap where the audit trail existed
+  only in-memory until process restart.
+
+- **`tests/test_sprint_trace_logging.py`** — 6 tests (TL-01–TL-06).
+  Covers: `save_trace_step` / `get_trace_steps` round-trip, empty result for unknown
+  `execution_id`, multi-step sort order by `step_index`, positive `rowid` guarantee,
+  `GovernedRunProgramHandler` records trace step on success, no trace step on error.
+
+---
+
 ## [0.4.0] — 2026-05-25
 
 ### Added
@@ -55,7 +78,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - **`FOREIGN KEY` constraint removed from `traces` table** — the FK
   `traces(program_id) REFERENCES programs(id)` caused `IntegrityError` when `save_trace`
   was called before a corresponding `save_program` (e.g. on FAILED executions without
-  `save_as`). Traces are now stored independently of programs.  
+  `save_as`). Traces are now stored independently of programs.
   Cascade behaviour preserved explicitly: `delete_program` now issues
   `DELETE FROM traces WHERE program_id = ?` before the program delete.
 
@@ -65,7 +88,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
-- **`tests/test_sprint4_trace_persistence.py`** — 6 regression tests (TP-01–06).  
+- **`tests/test_sprint4_trace_persistence.py`** — 6 regression tests (TP-01–06).
   Covers: `save_trace` / `get_trace` round-trip, missing trace returns `None`,
   `GovernedRunProgramHandler` delegates to `_tools.run_program`, MCP `get_trace` tool,
   `INSERT OR REPLACE` update semantics, `FAILED` trace persisted correctly.
