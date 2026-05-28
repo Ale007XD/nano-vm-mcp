@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from nano_vm_mcp.store import ProgramStore
+import pytest
+
 from nano_vm_mcp.handlers import GovernedRunProgramHandler
+from nano_vm_mcp.store import ProgramStore
 
 pytestmark = pytest.mark.asyncio
 
@@ -133,8 +134,10 @@ async def test_tl05_handler_records_trace_step_on_success(tmp_path: Path) -> Non
     }
     fake_trace_dict = {"state_snapshots": []}
 
-    with patch("nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock) as mock_run, \
-         patch.object(store, "get_trace", return_value=fake_trace_dict):
+    with (
+        patch("nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock) as mock_run,
+        patch.object(store, "get_trace", return_value=fake_trace_dict),
+    ):
         mock_run.return_value = fake_result
         await handler.handle("run_program", {"program": program}, store)
 
