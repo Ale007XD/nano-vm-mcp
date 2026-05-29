@@ -236,6 +236,88 @@ asyncio.run(main())
 
 ---
 
+```markdown
+## Use with Claude Code Dynamic Workflows
+
+nano-vm-mcp works as a governed execution backend for [Claude Code dynamic workflows](https://claude.com/blog/introducing-dynamic-workflows-in-claude-code). While Claude Code orchestrates subagents dynamically, nano-vm-mcp adds what native subagents lack: deterministic FSM execution, replayable traces, exactly-once semantics, and an append-only audit trail per workflow step.
+
+### Why pair them
+
+| | Claude Code Dynamic Workflows | + nano-vm-mcp |
+| :--- | :---: | :---: |
+| Parallel subagents | ✅ | ✅ |
+| Dynamic orchestration | ✅ | ✅ |
+| Deterministic step execution | ❌ | ✅ |
+| Replayable audit trail | ❌ | ✅ |
+| Inter-session idempotency | ❌ | ✅ |
+| GDPR tombstoning | ❌ | ✅ |
+| Capability enforcement | ❌ | ✅ |
+
+Use this combination when a workflow subagent must execute a governed process — payment pipeline, approval chain, compliance check — where correctness and auditability matter beyond the LLM layer.
+
+### Setup
+
+Install and start the server:
+
+```bash
+pip install nano-vm-mcp
+nano-vm-mcp --transport stdio
+```
+
+Add to your Claude Code MCP configuration (`~/.claude/claude_desktop_config.json` or project-level `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "nano-vm-mcp": {
+      "command": "nano-vm-mcp",
+      "args": ["--transport", "stdio"]
+    }
+  }
+}
+```
+
+### Example: governed payment step inside a workflow
+
+A Claude Code subagent calls `run_program` to execute a payment pipeline with full governance:
+
+```python
+# Claude Code subagent calls this tool directly
+result = await session.call_tool(
+    "run_program",
+    {
+        "program": {
+            "name": "payment_pipeline",
+            "steps": [
+                {"id": "validate",  "type": "tool", "tool": "validate_amount"},
+                {"id": "reserve",   "type": "tool", "tool": "reserve_funds"},
+                {"id": "capture",   "type": "tool", "tool": "capture_payment"},
+                {"id": "receipt",   "type": "tool", "tool": "send_receipt"},
+            ]
+        },
+        "idempotency_key": "order-abc-123",  # exactly-once across retries and restarts
+    }
+)
+# Returns: trace_id, status, step count, cost
+# Every step produces a GovernanceEnvelope in SQLite — tamper-evident, append-only
+```
+
+The FSM kernel controls all state transitions. The subagent cannot skip steps, reorder execution, or bypass capability checks — regardless of what the LLM decides at the orchestration layer.
+
+### Retrieve the audit trail
+
+After execution, any agent or observer can retrieve the full trace:
+
+```python
+trace = await session.call_tool("get_trace", {"trace_id": result["trace_id"]})
+# Returns: per-step status, duration_ms, usage, state_snapshots
+```
+
+Traces persist across sessions in SQLite WAL. `trace_id` is UUID4-stable for OTel propagation.
+```
+
+---
+
 ## Idempotency — Inter-session Exactly-Once
 
 Pass `idempotency_key` to `run_program` to guarantee that a program executes at most once per key, even across process restarts:
