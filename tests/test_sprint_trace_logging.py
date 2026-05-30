@@ -124,7 +124,7 @@ async def test_tl05_handler_records_trace_step_on_success(tmp_path: Path) -> Non
         "name": "test_prog",
         "steps": [{"id": "s1", "type": "tool", "tool": "echo"}],
     }
-    fake_result = {
+    fake_result: dict[str, object] = {
         "trace_id": "trace-tl05",
         "program_id": "prog-tl05",
         "status": "TraceStatus.SUCCESS",
