@@ -132,7 +132,7 @@ async def test_tl05_handler_records_trace_step_on_success(tmp_path: Path) -> Non
         "cost": 0.0,
         "error": None,
     }
-    fake_trace_dict = {"state_snapshots": []}
+    fake_trace_dict: dict[str, object] = {"state_snapshots": []}
 
     with (
         patch("nano_vm_mcp.handlers._tools.run_program", new_callable=AsyncMock) as mock_run,
