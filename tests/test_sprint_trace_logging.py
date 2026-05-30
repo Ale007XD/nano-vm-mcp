@@ -172,4 +172,3 @@ async def test_tl06_handler_no_trace_step_on_error(tmp_path: Path) -> None:
     # error result has no trace_id → save_trace_step must not be called
     traces = store.get_trace_steps("any-id")
     assert traces == []
-    
