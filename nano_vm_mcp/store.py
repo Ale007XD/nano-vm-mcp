@@ -277,7 +277,7 @@ class ProgramStore:
                 (execution_id, step_index, step_id, json.dumps(projected), canonical_hash),
             )
             self._con.commit()
-            return cur.lastrowid  # type: ignore[return-value]
+            return cur.lastrowid if cur.rowcount > 0 else 0  # type: ignore[return-value]
 
     def get_trace_steps(self, execution_id: str) -> list[dict[str, Any]]:
         rows = self._con.execute(
