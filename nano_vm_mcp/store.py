@@ -69,6 +69,8 @@ def _init_schema(con: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_exec_traces_execution_id
             ON execution_traces (execution_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_exec_traces_unique
+            ON execution_traces (execution_id, step_index);
     """)
     con.commit()
 
@@ -269,7 +271,7 @@ class ProgramStore:
     ) -> int:
         with self._lock:
             cur = self._con.execute(
-                """INSERT INTO execution_traces
+                """INSERT OR IGNORE INTO execution_traces
                        (execution_id, step_index, step_id, projected_json, canonical_hash)
                    VALUES (?, ?, ?, ?, ?)""",
                 (execution_id, step_index, step_id, json.dumps(projected), canonical_hash),
