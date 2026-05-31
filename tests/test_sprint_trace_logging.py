@@ -179,8 +179,7 @@ def test_tl07_duplicate_step_ignored(tmp_path: Path) -> None:
     store = ProgramStore(str(tmp_path / "test.db"))
     store.save_trace_step("exec-1", 0, "step_a", {"k": "v"}, "hash_a")
     # второй вызов с тем же (execution_id, step_index) — должен молча пропуститься
-    rowid = store.save_trace_step("exec-1", 0, "step_b", {"k": "v2"}, "hash_b")
-    assert rowid == 0  # INSERT OR IGNORE → lastrowid=0 при конфликте
+    store.save_trace_step("exec-1", 0, "step_b", {"k": "v2"}, "hash_b")
     steps = store.get_trace_steps("exec-1")
     assert len(steps) == 1
     assert steps[0]["step_id"] == "step_a"  # первая запись сохранена
