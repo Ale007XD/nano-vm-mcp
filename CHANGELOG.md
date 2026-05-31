@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## v0.4.2 (2026-05-31)
+
+### Fixed
+- `execution_traces`: added `UNIQUE INDEX (execution_id, step_index)` — prevents duplicate
+  step entries during retry storms (`INSERT OR IGNORE` in `save_trace_step`).
+  Existing databases gain the index automatically on first startup via
+  `CREATE UNIQUE INDEX IF NOT EXISTS`.
+
 ## [0.4.1] — 2026-05-28
 
 ### Added
