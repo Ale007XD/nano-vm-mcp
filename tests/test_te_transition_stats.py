@@ -22,7 +22,6 @@ TE-14  tools.run_program: программа из 1 шага — upsert не в�
 from __future__ import annotations
 
 import math
-import os
 import tempfile
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -104,10 +103,7 @@ class TestTransitionStatsStore:
 def _make_trace(step_ids: list[str], program_name: str = "test") -> Any:
     from nano_vm.models import StepResult, StepStatus, Trace
 
-    steps = [
-        StepResult(step_id=sid, status=StepStatus.SUCCESS)
-        for sid in step_ids
-    ]
+    steps = [StepResult(step_id=sid, status=StepStatus.SUCCESS) for sid in step_ids]
     t = Trace(program_name=program_name)
     for s in steps:
         t = t.add_step(s)
@@ -190,6 +186,7 @@ class TestToolsRunProgramWiring:
     async def test_upsert_called_for_each_transition(self):
         """TE-13: run_program вызывает upsert_transition для каждого перехода."""
         from nano_vm.models import StepResult, StepStatus, Trace, TraceStatus
+
         from nano_vm_mcp import tools
 
         step_ids = ["validate", "reserve", "capture", "receipt"]
@@ -229,6 +226,7 @@ class TestToolsRunProgramWiring:
     async def test_upsert_not_called_for_single_step(self):
         """TE-14: программа из 1 шага — upsert не вызывается."""
         from nano_vm.models import StepResult, StepStatus, Trace, TraceStatus
+
         from nano_vm_mcp import tools
 
         steps = [StepResult(step_id="only", status=StepStatus.SUCCESS)]
