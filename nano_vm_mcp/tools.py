@@ -137,6 +137,19 @@ async def run_program(
         trace=trace_dict,
     )
 
+    # Record per-step transitions for transition_stats (TE-02)
+    model_id = os.getenv("NANO_VM_MCP_LLM_MODEL", "__none__") or "__none__"
+    steps = trace.steps if hasattr(trace, "steps") else []
+    if len(steps) >= 2:
+        step_ids = [s.step_id for s in steps]
+        for from_s, to_s in zip(step_ids, step_ids[1:]):
+            store.upsert_transition(
+                program_name=program.name,
+                from_step=from_s,
+                to_step=to_s,
+                model_id=model_id,
+            )
+
     return {
         "trace_id": trace_id,
         "program_id": program_id,
