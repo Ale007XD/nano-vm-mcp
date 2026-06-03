@@ -71,6 +71,18 @@ def _init_schema(con: sqlite3.Connection) -> None:
             ON execution_traces (execution_id);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_exec_traces_unique
             ON execution_traces (execution_id, step_index);
+        CREATE TABLE IF NOT EXISTS transition_stats (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            program_name TEXT    NOT NULL,
+            model_id     TEXT    NOT NULL DEFAULT '__none__',
+            from_step    TEXT    NOT NULL,
+            to_step      TEXT    NOT NULL,
+            count        INTEGER NOT NULL DEFAULT 1,
+            updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+            UNIQUE(program_name, model_id, from_step, to_step)
+        );
+        CREATE INDEX IF NOT EXISTS idx_transition_stats_program
+            ON transition_stats (program_name);
     """)
     con.commit()
 
@@ -369,3 +381,52 @@ class ProgramStore:
             )
             self._con.commit()
             return cur.rowcount > 0
+
+    # ------------------------------------------------------------------
+    # TransitionStats — per-run transition aggregation (v0.5.0)
+    # ------------------------------------------------------------------
+
+    def upsert_transition(
+        self,
+        program_name: str,
+        from_step: str,
+        to_step: str,
+        model_id: str = "__none__",
+    ) -> None:
+        """INSERT or UPDATE transition count для (program_name, model_id, from_step, to_step)."""
+        with self._lock:
+            self._con.execute(
+                """INSERT INTO transition_stats
+                       (program_name, model_id, from_step, to_step, count, updated_at)
+                   VALUES (?, ?, ?, ?, 1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                   ON CONFLICT(program_name, model_id, from_step, to_step)
+                   DO UPDATE SET
+                       count      = count + 1,
+                       updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')""",
+                (program_name, model_id, from_step, to_step),
+            )
+            self._con.commit()
+
+    def get_transitions(
+        self,
+        program_name: str,
+        model_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Возвращает все переходы для program_name, опционально фильтруя по model_id."""
+        if model_id is not None:
+            rows = self._con.execute(
+                """SELECT program_name, model_id, from_step, to_step, count, updated_at
+                   FROM transition_stats
+                   WHERE program_name = ? AND model_id = ?
+                   ORDER BY count DESC""",
+                (program_name, model_id),
+            ).fetchall()
+        else:
+            rows = self._con.execute(
+                """SELECT program_name, model_id, from_step, to_step, count, updated_at
+                   FROM transition_stats
+                   WHERE program_name = ?
+                   ORDER BY count DESC""",
+                (program_name,),
+            ).fetchall()
+        return [dict(r) for r in rows]
