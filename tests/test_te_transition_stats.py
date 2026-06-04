@@ -119,8 +119,8 @@ class TestTransitionEntropy:
         """
         from nano_vm.analyzer import TraceAnalyzer
 
-        # Одна уникальная пара: b→b, b→b, b→b, b→b → H = 0.0
-        trace = _make_trace(["a", "b", "b", "b", "b", "b"])
+        # step→step × 4: единственная пара, p=1.0, H = -1.0*log2(1.0) = 0.0
+        trace = _make_trace(["step", "step", "step", "step", "step"])
         h = TraceAnalyzer(trace).transition_entropy()
         assert h == pytest.approx(0.0, abs=1e-9)
 
