@@ -30,7 +30,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "llm-nano-vm>=0.8.3,<0.9",
+    "llm-nano-vm>=0.8.4,<0.9",
     "mcp>=1.0.0",
     "starlette>=0.37.0",
     "uvicorn>=0.29.0",
@@ -44,7 +44,7 @@ litellm = [
 dev = [
     # Явно пинаем llm-nano-vm в dev — pip не всегда апгрейдит транзитивные
     # зависимости при наличии кэша; явная запись гарантирует актуальный wheel.
-    "llm-nano-vm>=0.8.3,<0.9",
+    "llm-nano-vm>=0.8.4,<0.9",
     "litellm>=1.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
