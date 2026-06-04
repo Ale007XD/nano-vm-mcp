@@ -1,14 +1,10 @@
-# .github/workflows/ci.yml
-
 name: CI
 
 on:
   push:
     branches: ["main", "v0.3.0"]
-
   pull_request:
     branches: ["main"]
-
   workflow_dispatch:
     inputs:
       branch:
@@ -16,13 +12,11 @@ on:
         required: true
         default: "main"
         type: string
-
       python_versions:
         description: "Python versions to test (comma-separated)"
         required: false
         default: "3.10,3.11,3.12"
         type: string
-
       skip_mypy:
         description: "Skip mypy type check"
         required: false
@@ -36,6 +30,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# ---------------------------------------------------------------------------
+# resolve — строим матрицу версий и ref один раз
+# ---------------------------------------------------------------------------
 jobs:
   resolve:
     name: Resolve inputs
@@ -54,23 +51,21 @@ jobs:
             VERSIONS="3.10,3.11,3.12"
             REF="${{ github.ref_name }}"
           fi
-
           MATRIX=$(echo "$VERSIONS" | python3 -c "
           import sys, json
-
           raw = sys.stdin.read().strip()
           versions = [v.strip() for v in raw.split(',') if v.strip()]
-
           print(json.dumps(versions))
           ")
-
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF"       >> "$GITHUB_OUTPUT"
+          echo "### CI targets"                          >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch:** \`$REF\`"                 >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Python:** \`$VERSIONS\`"            >> "$GITHUB_STEP_SUMMARY"
 
-          echo "### CI targets" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Branch:** \`$REF\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Python:** \`$VERSIONS\`" >> "$GITHUB_STEP_SUMMARY"
-
+  # ---------------------------------------------------------------------------
+  # lint — ruff + mypy (только 3.12, быстро)
+  # ---------------------------------------------------------------------------
   lint:
     name: Lint (ruff + mypy)
     runs-on: ubuntu-latest
@@ -84,11 +79,25 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          # Инвалидируем кэш при изменении pyproject.toml —
+          # это предотвращает использование устаревшего wheel llm-nano-vm.
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev]" --upgrade
+
+      # Smoke-import: mypy пропускает ошибки nano_vm.* через ignore_missing_imports,
+      # но рантайм упадёт. Проверяем здесь явно, чтобы поймать до тестов.
+      - name: Smoke-import nano_vm modules
+        run: |
+          python -c "
+          from nano_vm.analyzer import TraceAnalyzer
+          from nano_vm.vm import ExecutionVM
+          from nano_vm.models import TraceStatus
+          print('nano_vm imports OK')
+          "
 
       - name: Ruff check
         run: python -m ruff check .
@@ -97,6 +106,9 @@ jobs:
         if: ${{ inputs.skip_mypy != true }}
         run: python -m mypy nano_vm_mcp/
 
+  # ---------------------------------------------------------------------------
+  # test — полная матрица
+  # ---------------------------------------------------------------------------
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -114,11 +126,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev]" --upgrade
+
+      # Верифицируем что нужный модуль реально в wheel, а не только в зависимости.
+      # Если analyzer.py отсутствует в wheel — ловим здесь с понятным сообщением.
+      - name: Verify llm-nano-vm wheel contains analyzer
+        run: |
+          pip show -f llm-nano-vm | grep "analyzer.py" \
+            || (echo "❌ analyzer.py not found in llm-nano-vm wheel" \
+                && echo "--- pip show -f llm-nano-vm ---" \
+                && pip show -f llm-nano-vm \
+                && exit 1)
+          python -c "from nano_vm.analyzer import TraceAnalyzer; print('✅ nano_vm.analyzer OK')"
 
       - name: Pytest + coverage
         run: |
