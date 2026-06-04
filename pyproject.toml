@@ -5,18 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "nano-vm-mcp"
 dynamic = ["version"]
-
 description = "MCP server for llm-nano-vm — run deterministic LLM programs via Model Context Protocol"
-
 authors = [
     { name = "Ale007XD", email = "alex.deloverov@gmail.com" }
 ]
-
 readme = "README.md"
 requires-python = ">=3.10"
-
 license = { text = "MIT" }
-
 keywords = [
     "llm",
     "agent",
@@ -25,7 +20,6 @@ keywords = [
     "ai",
     "model-context-protocol"
 ]
-
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -35,7 +29,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-
 dependencies = [
     "llm-nano-vm>=0.8.3,<0.9",
     "mcp>=1.0.0",
@@ -48,8 +41,11 @@ dependencies = [
 litellm = [
     "litellm>=1.0",
 ]
-
 dev = [
+    # Явно пинаем llm-nano-vm в dev — pip не всегда апгрейдит транзитивные
+    # зависимости при наличии кэша; явная запись гарантирует актуальный wheel.
+    "llm-nano-vm>=0.8.3,<0.9",
+    "litellm>=1.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
@@ -64,40 +60,55 @@ nano-vm-mcp = "nano_vm_mcp.cli:main"
 
 [project.urls]
 Repository = "https://github.com/Ale007XD/nano-vm-mcp"
-Homepage = "https://github.com/Ale007XD/nano-vm-mcp"
-Issues = "https://github.com/Ale007XD/nano-vm-mcp/issues"
+Homepage   = "https://github.com/Ale007XD/nano-vm-mcp"
+Issues     = "https://github.com/Ale007XD/nano-vm-mcp/issues"
 
+# ---------------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------------
 [tool.hatch.version]
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["nano_vm_mcp"]
 
+# ---------------------------------------------------------------------------
+# Test
+# ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
+# ---------------------------------------------------------------------------
+# Lint
+# ---------------------------------------------------------------------------
 [tool.ruff]
-line-length = 100
+line-length    = 100
 target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
-"nano_vm_mcp/server.py" = ["I001"]
-"nano_vm_mcp/cli.py" = ["I001"]
-"tests/test_auth.py" = ["I001"]
-"tests/test_store.py" = ["I001"]
-"tests/test_tools.py" = ["I001"]
+"nano_vm_mcp/server.py"  = ["I001"]
+"nano_vm_mcp/cli.py"     = ["I001"]
+"tests/test_auth.py"     = ["I001"]
+"tests/test_store.py"    = ["I001"]
+"tests/test_tools.py"    = ["I001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["nano_vm_mcp"]
 
+# ---------------------------------------------------------------------------
+# Mypy
+# ---------------------------------------------------------------------------
 [tool.mypy]
-python_version = "3.10"
-strict = true
+python_version    = "3.10"
+strict            = true
 warn_unused_ignores = true
 
+# nano_vm — внешний пакет; игнорируем только missing stubs, не сами импорты.
+# ignore_missing_imports=true здесь скрывает ModuleNotFoundError в рантайме —
+# поэтому дополнительно верифицируем импорты отдельным smoke-шагом в CI.
 [[tool.mypy.overrides]]
-module = ["nano_vm", "nano_vm.*"]
+module                = ["nano_vm", "nano_vm.*"]
 ignore_missing_imports = true
