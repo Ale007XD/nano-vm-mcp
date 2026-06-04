@@ -112,11 +112,15 @@ def _make_trace(step_ids: list[str], program_name: str = "test") -> Any:
 
 class TestTransitionEntropy:
     def test_deterministic_pipeline_zero_entropy(self):
-        """TE-07: детерминированный pipeline → 0.0 (одна пара повторяется)."""
+        """TE-07: детерминированный pipeline → 0.0 (одна пара повторяется).
+
+        Одна уникальная пара b→b с count=4: p=1.0, H = -1.0*log2(1.0) = 0.0.
+        Trace ["a","b","a","b","a","b"] даёт ДВЕ пары (a→b и b→a) → H≈0.97 — неверно.
+        """
         from nano_vm.analyzer import TraceAnalyzer
 
-        # Все переходы одинаковые: a→b, a→b, a→b
-        trace = _make_trace(["a", "b", "a", "b", "a", "b"])
+        # Одна уникальная пара: b→b, b→b, b→b, b→b → H = 0.0
+        trace = _make_trace(["a", "b", "b", "b", "b", "b"])
         h = TraceAnalyzer(trace).transition_entropy()
         assert h == pytest.approx(0.0, abs=1e-9)
 
@@ -147,17 +151,17 @@ class TestTransitionEntropy:
         assert h == 0.0
 
     def test_alert_fires_above_threshold(self):
-        """TE-10: alert срабатывает при H > 1.5."""
+        """TE-10: alert срабатывает при H > 2.5 (threshold = 2.5 bits)."""
         from nano_vm.analyzer import TraceAnalyzer
 
-        # 8 уникальных переходов → H = log2(8) = 3.0 > 1.5
+        # 8 уникальных переходов → H = log2(8) = 3.0 > 2.5
         trace = _make_trace(["a", "b", "c", "d", "e", "f", "g", "h", "i"])
         report = TraceAnalyzer(trace).report()
         alert_msgs = " ".join(report.alerts)
         assert "transition_entropy" in alert_msgs
 
     def test_alert_does_not_fire_below_threshold(self):
-        """TE-11: alert не срабатывает при H <= 1.5."""
+        """TE-11: alert не срабатывает при H <= 2.5 (threshold = 2.5 bits)."""
         from nano_vm.analyzer import TraceAnalyzer
 
         # Один переход a→b повторяется → H = 0.0
