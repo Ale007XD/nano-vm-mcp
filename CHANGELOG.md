@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.4.3] — 2026-06-04
+
+### Added
+- `transition_stats` table: `(program_name, model_id, from_step, to_step, count)`
+  with `UNIQUE(...) ON CONFLICT DO UPDATE count+1`
+- `store.upsert_transition(program_name, from_step, to_step, model_id='__none__')` 
+- `store.get_transitions(program_name, model_id=None) → list[dict]`
+- `tools.py`: вызов `upsert_transition` после `vm.run()` для каждой пары `(steps[i], steps[i+1])`
+- `model_id` из env `NANO_VM_MCP_LLM_MODEL` или `'__none__'`
+
+### CI
+- `pyproject.toml`: `llm-nano-vm` явно в `[dev]` extras
+- `pyproject.toml`: `litellm` в `[dev]` extras  
+- `ci.yml`: `cache-dependency-path: pyproject.toml`
+- `ci.yml`: `pip install --upgrade` в install шаге
+- `ci.yml`: smoke-import шаг в lint job
+- `ci.yml`: verify wheel шаг в test job
+
+### Tests
+- TE-01..14: transition_stats CRUD, upsert idempotency, count increment, model_id filter
+- CI: 115/115 PASS
+
 ## v0.4.2 (2026-05-31)
 
 ### Fixed
