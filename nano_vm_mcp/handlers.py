@@ -136,6 +136,15 @@ class GetProgramHandler(ToolHandler):
         return _ok(await _tools.get_program(store, arguments["program_id"]))
 
 
+class DebugTraceHandler(ToolHandler):
+    async def _try_handle(
+        self, name: str, arguments: dict[str, Any], store: ProgramStore
+    ) -> list[TextContent] | None:
+        if name != "debug_trace":
+            return None
+        return _ok(await _tools.debug_trace(store, arguments["trace_id"]))
+
+
 class DeleteProgramHandler(ToolHandler):
     async def _try_handle(
         self, name: str, arguments: dict[str, Any], store: ProgramStore
@@ -443,6 +452,21 @@ class GovernedRunProgramHandler(ToolHandler):
                 canonical_hash=envelope.canonical_snapshot_hash,
             )
 
+        # 8. Auto-diagnostic: if program FAILED and AGENT_DEBUGGER_TOKEN is set,
+        #    call Agent Debugger inline and attach diagnostic to result (v0.4.4)
+        if (
+            trace_id
+            and isinstance(result, dict)
+            and result.get("status") == "FAILED"
+            and not result.get("error")
+        ):
+            import os as _os
+            if _os.getenv("AGENT_DEBUGGER_TOKEN"):
+                trace_dict_for_debug = store.get_trace(trace_id)
+                if trace_dict_for_debug is not None:
+                    diagnostic = await _tools.call_agent_debugger(trace_dict_for_debug)
+                    result = {**result, "diagnostic": diagnostic}
+
         return _ok(result)
 
 
@@ -454,7 +478,9 @@ class GovernedRunProgramHandler(ToolHandler):
 def build_chain(policy: PolicySnapshot | None = None) -> ToolHandler:
     """Construct and return the head of the tool-dispatch chain."""
     head: ToolHandler = GovernedRunProgramHandler(policy=policy)
-    head.set_successor(GetTraceHandler()).set_successor(ListProgramsHandler()).set_successor(
-        GetProgramHandler()
-    ).set_successor(DeleteProgramHandler()).set_successor(UnknownToolHandler())
+    head.set_successor(GetTraceHandler()).set_successor(DebugTraceHandler()).set_successor(
+        ListProgramsHandler()
+    ).set_successor(GetProgramHandler()).set_successor(
+        DeleteProgramHandler()
+    ).set_successor(UnknownToolHandler())
     return head

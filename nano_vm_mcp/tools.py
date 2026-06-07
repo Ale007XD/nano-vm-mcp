@@ -7,6 +7,18 @@ import os
 import uuid
 from typing import Any
 
+try:
+    import httpx
+    _HTTPX_AVAILABLE = True
+except ImportError:
+    _HTTPX_AVAILABLE = False
+
+AGENT_DEBUGGER_URL = os.getenv(
+    "AGENT_DEBUGGER_URL",
+    "https://agent-debugger-production.up.railway.app",
+)
+AGENT_DEBUGGER_TOKEN = os.getenv("AGENT_DEBUGGER_TOKEN", "")
+
 from nano_vm import ExecutionVM, Program
 from nano_vm.adapters import MockLLMAdapter
 from pydantic import ValidationError
@@ -76,6 +88,89 @@ def _extract_cost(trace: Any) -> float:
     if hasattr(trace, "total_cost"):
         return float(trace.total_cost or 0.0)
     return 0.0
+
+
+def _build_debugger_payload(trace_dict: dict[str, Any]) -> dict[str, Any]:
+    """
+    Build Agent Debugger /analyze payload from stored trace dict.
+
+    Maps nano-vm Trace fields to the agreed request schema.
+    FAIL:<reason> sentinels are intentional FSM outputs — not tool errors.
+    """
+    steps = trace_dict.get("steps", [])
+    mapped_steps = []
+    for i, s in enumerate(steps):
+        mapped_steps.append({
+            "step_id": s.get("step_id", f"step_{i}"),
+            "type": s.get("type", "tool"),
+            "status": s.get("status", "UNKNOWN"),
+            "output": str(s.get("output", "")),
+            "retries": s.get("retry_count", 0),
+            "duration_ms": s.get("duration_ms", 0),
+        })
+
+    return {
+        "trace_id": trace_dict.get("trace_id", ""),
+        "trace": {
+            "program_name": trace_dict.get("program_name", ""),
+            "status": trace_dict.get("status", "FAILED"),
+            "steps": mapped_steps,
+            "final_step": mapped_steps[-1]["step_id"] if mapped_steps else "",
+            "escalations": 0,
+            "blocked_actions": 0,
+            "transition_entropy": trace_dict.get("transition_entropy", 0.0),
+            "rollback_density": trace_dict.get("rollback_density", 0.0),
+            "tool_churn_rate": trace_dict.get("tool_churn_rate", 0.0),
+        },
+    }
+
+
+async def call_agent_debugger(trace_dict: dict[str, Any]) -> dict[str, Any]:
+    """
+    POST trace to Agent Debugger /analyze endpoint.
+
+    Returns diagnostic dict or {"error": reason} if unavailable.
+    Requires AGENT_DEBUGGER_TOKEN env var.
+    """
+    if not _HTTPX_AVAILABLE:
+        return {"error": "httpx not installed — pip install httpx"}
+    if not AGENT_DEBUGGER_TOKEN:
+        return {"error": "AGENT_DEBUGGER_TOKEN not set"}
+
+    payload = _build_debugger_payload(trace_dict)
+    url = f"{AGENT_DEBUGGER_URL.rstrip('/')}/analyze"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {AGENT_DEBUGGER_TOKEN}"},
+            )
+            resp.raise_for_status()
+            return resp.json()  # type: ignore[no-any-return]
+    except httpx.HTTPStatusError as exc:
+        return {"error": f"Agent Debugger HTTP {exc.response.status_code}: {exc.response.text}"}
+    except Exception as exc:
+        return {"error": f"Agent Debugger unreachable: {exc}"}
+
+
+async def debug_trace(store: ProgramStore, trace_id: str) -> dict[str, Any]:
+    """
+    MCP tool: retrieve trace by ID and run Agent Debugger diagnostics.
+
+    Returns combined result: trace metadata + diagnostic from Agent Debugger.
+    """
+    trace_dict = store.get_trace(trace_id)
+    if trace_dict is None:
+        return {"error": f"Trace '{trace_id}' not found"}
+
+    diagnostic = await call_agent_debugger(trace_dict)
+    return {
+        "trace_id": trace_id,
+        "status": trace_dict.get("status"),
+        "diagnostic": diagnostic,
+    }
 
 
 async def run_program(
