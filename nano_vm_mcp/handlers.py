@@ -457,7 +457,7 @@ class GovernedRunProgramHandler(ToolHandler):
         if (
             trace_id
             and isinstance(result, dict)
-            and result.get("status") == "FAILED"
+            and str(result.get("status", "")).endswith("FAILED")
             and not result.get("error")
         ):
             import os as _os
