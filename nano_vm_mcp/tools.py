@@ -9,6 +9,7 @@ from typing import Any
 
 try:
     import httpx
+
     _HTTPX_AVAILABLE = True
 except ImportError:
     _HTTPX_AVAILABLE = False
@@ -100,14 +101,16 @@ def _build_debugger_payload(trace_dict: dict[str, Any]) -> dict[str, Any]:
     steps = trace_dict.get("steps", [])
     mapped_steps = []
     for i, s in enumerate(steps):
-        mapped_steps.append({
-            "step_id": s.get("step_id", f"step_{i}"),
-            "type": s.get("type", "tool"),
-            "status": s.get("status", "UNKNOWN"),
-            "output": str(s.get("output", "")),
-            "retries": s.get("retry_count", 0),
-            "duration_ms": s.get("duration_ms", 0),
-        })
+        mapped_steps.append(
+            {
+                "step_id": s.get("step_id", f"step_{i}"),
+                "type": s.get("type", "tool"),
+                "status": s.get("status", "UNKNOWN"),
+                "output": str(s.get("output", "")),
+                "retries": s.get("retry_count", 0),
+                "duration_ms": s.get("duration_ms", 0),
+            }
+        )
 
     return {
         "trace_id": trace_dict.get("trace_id", ""),

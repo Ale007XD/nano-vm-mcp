@@ -461,6 +461,7 @@ class GovernedRunProgramHandler(ToolHandler):
             and not result.get("error")
         ):
             import os as _os
+
             if _os.getenv("AGENT_DEBUGGER_TOKEN"):
                 trace_dict_for_debug = store.get_trace(trace_id)
                 if trace_dict_for_debug is not None:
@@ -480,7 +481,7 @@ def build_chain(policy: PolicySnapshot | None = None) -> ToolHandler:
     head: ToolHandler = GovernedRunProgramHandler(policy=policy)
     head.set_successor(GetTraceHandler()).set_successor(DebugTraceHandler()).set_successor(
         ListProgramsHandler()
-    ).set_successor(GetProgramHandler()).set_successor(
-        DeleteProgramHandler()
-    ).set_successor(UnknownToolHandler())
+    ).set_successor(GetProgramHandler()).set_successor(DeleteProgramHandler()).set_successor(
+        UnknownToolHandler()
+    )
     return head
