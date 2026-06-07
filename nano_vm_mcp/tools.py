@@ -14,12 +14,6 @@ try:
 except ImportError:
     _HTTPX_AVAILABLE = False
 
-AGENT_DEBUGGER_URL = os.getenv(
-    "AGENT_DEBUGGER_URL",
-    "https://agent-debugger-production.up.railway.app",
-)
-AGENT_DEBUGGER_TOKEN = os.getenv("AGENT_DEBUGGER_TOKEN", "")
-
 from nano_vm import ExecutionVM, Program
 from nano_vm.adapters import MockLLMAdapter
 from pydantic import ValidationError
@@ -27,6 +21,12 @@ from pydantic import ValidationError
 from .store import ProgramStore
 
 logger = logging.getLogger(__name__)
+
+AGENT_DEBUGGER_URL = os.getenv(
+    "AGENT_DEBUGGER_URL",
+    "https://agent-debugger-production.up.railway.app",
+)
+AGENT_DEBUGGER_TOKEN = os.getenv("AGENT_DEBUGGER_TOKEN", "")
 
 
 def _has_llm_steps(program_data: dict[str, Any]) -> bool:
