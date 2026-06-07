@@ -22,7 +22,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -182,9 +181,7 @@ class TestCallAgentDebugger:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(
-            side_effect=httpx.HTTPStatusError(
-                "401", request=MagicMock(), response=mock_response
-            )
+            side_effect=httpx.HTTPStatusError("401", request=MagicMock(), response=mock_response)
         )
 
         with (
@@ -270,9 +267,7 @@ def _make_mock_trace(status: str = "FAILED") -> MagicMock:
 
 MINIMAL_PROGRAM: dict[str, Any] = {
     "name": "test_program",
-    "steps": [
-        {"id": "step_1", "type": "tool", "tool": "noop", "is_terminal": True}
-    ],
+    "steps": [{"id": "step_1", "type": "tool", "tool": "noop", "is_terminal": True}],
 }
 
 
@@ -300,7 +295,10 @@ class TestAutodiagnostic:
             mock_build.return_value = mock_vm
 
             import json
-            result_tc = await handler._try_handle("run_program", {"program": MINIMAL_PROGRAM}, store)
+
+            result_tc = await handler._try_handle(
+                "run_program", {"program": MINIMAL_PROGRAM}, store
+            )
 
         assert result_tc is not None
         result = json.loads(result_tc[0].text)
@@ -330,7 +328,10 @@ class TestAutodiagnostic:
             mock_build.return_value = mock_vm
 
             import json
-            result_tc = await handler._try_handle("run_program", {"program": MINIMAL_PROGRAM}, store)
+
+            result_tc = await handler._try_handle(
+                "run_program", {"program": MINIMAL_PROGRAM}, store
+            )
 
         mock_debugger.assert_not_called()
         result = json.loads(result_tc[0].text)
@@ -359,7 +360,10 @@ class TestAutodiagnostic:
             mock_build.return_value = mock_vm
 
             import json
-            result_tc = await handler._try_handle("run_program", {"program": MINIMAL_PROGRAM}, store)
+
+            result_tc = await handler._try_handle(
+                "run_program", {"program": MINIMAL_PROGRAM}, store
+            )
 
         mock_debugger.assert_not_called()
         result = json.loads(result_tc[0].text)
