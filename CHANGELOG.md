@@ -6,6 +6,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.4.4] — 2026-06-09
+
+### Added
+- `debug_trace` MCP tool — sends trace to Agent Debugger for diagnostic analysis
+  - Opt-in via `AGENT_DEBUGGER_TOKEN` env var; no-op if unset
+  - Auto-diagnostic triggered on `FAILED` status after `run_program`
+  - `call_agent_debugger()` — HTTP integration with configurable endpoint
+- `DebugTraceHandler` — modular handler for Agent Debugger requests
+
+### Fixed
+- `TraceStatus` enum repr: `str(status).endswith("FAILED")` replaces
+  `status == "FAILED"` — enum serializes as `"TraceStatus.FAILED"` not `"FAILED"`
+
+### Tests
+- AD-01..10 GREEN; CI 125/125
+
 ## [0.4.3] — 2026-06-04
 
 ### Added
