@@ -79,8 +79,6 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-          # Инвалидируем кэш при изменении pyproject.toml —
-          # это предотвращает использование устаревшего wheel llm-nano-vm.
           cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
@@ -88,15 +86,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" --upgrade
 
-      # Smoke-import: mypy пропускает ошибки nano_vm.* через ignore_missing_imports,
-      # но рантайм упадёт. Проверяем здесь явно, чтобы поймать до тестов.
-      - name: Smoke-import nano_vm modules
+      # Smoke-import: проверяем все публичные модули nano_vm_mcp включая v0.4.4
+      - name: Smoke-import nano_vm_mcp modules
         run: |
           python -c "
           from nano_vm.analyzer import TraceAnalyzer
           from nano_vm.vm import ExecutionVM
           from nano_vm.models import TraceStatus
-          print('nano_vm imports OK')
+          from nano_vm_mcp.tools import debug_trace, call_agent_debugger
+          from nano_vm_mcp.handlers import DebugTraceHandler
+          print('all imports OK')
           "
 
       - name: Ruff check
@@ -133,8 +132,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" --upgrade
 
-      # Верифицируем что нужный модуль реально в wheel, а не только в зависимости.
-      # Если analyzer.py отсутствует в wheel — ловим здесь с понятным сообщением.
+      # Верифицируем wheel llm-nano-vm содержит analyzer.py
       - name: Verify llm-nano-vm wheel contains analyzer
         run: |
           pip show -f llm-nano-vm | grep "analyzer.py" \
@@ -143,6 +141,11 @@ jobs:
                 && pip show -f llm-nano-vm \
                 && exit 1)
           python -c "from nano_vm.analyzer import TraceAnalyzer; print('✅ nano_vm.analyzer OK')"
+
+      # Верифицируем httpx доступен (v0.4.4 основная зависимость)
+      - name: Verify httpx available
+        run: |
+          python -c "import httpx; print('✅ httpx', httpx.__version__)"
 
       - name: Pytest + coverage
         run: |
