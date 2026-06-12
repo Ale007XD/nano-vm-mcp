@@ -91,7 +91,7 @@ class TestBuildDebuggerPayload:
         trace_dict = _make_trace_dict()
         payload = _build_debugger_payload(trace_dict)
 
-        assert payload["trace_id"] == "3f8a1c2d-7e4b-4f9a-b2d1-9c0e5f3a8b7d"
+        assert payload["trace"]["trace_id"] == "3f8a1c2d-7e4b-4f9a-b2d1-9c0e5f3a8b7d"
         assert payload["trace"]["program_name"] == "PROGRAM_KYC"
         assert payload["trace"]["status"] == "FAILED"
         assert len(payload["trace"]["steps"]) == 2

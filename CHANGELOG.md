@@ -6,6 +6,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.4.5] — 2026-06-12
+
+### Fixed
+- `_build_debugger_payload`: `trace_id` moved inside `trace` object to match
+  Agent Debugger `/analyze` schema (`TraceRequest: {trace: {additionalProperties: true}}`).
+  Previously sent at top-level where it was silently ignored by the server.
+- `_build_debugger_payload`: step `status` normalized — `"StepStatus.FAILED"` → `"FAILED"`;
+  trace `status` normalized — `"TraceStatus.FAILED"` → `"FAILED"`.
+  Prevents enum repr leaking into Agent Debugger payload.
+
+### Verified
+- E2E integration test against `agent-debugger-production.up.railway.app`:
+  `call_agent_debugger()` → `/analyze` → `DiagnosticResponse` with correct `trace_id` echo.
+- Auto-diagnostic in `GovernedRunProgramHandler` confirmed working end-to-end.
+
 ## [0.4.4] — 2026-06-09
 
 ### Added

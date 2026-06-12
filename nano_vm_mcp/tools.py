@@ -105,18 +105,21 @@ def _build_debugger_payload(trace_dict: dict[str, Any]) -> dict[str, Any]:
             {
                 "step_id": s.get("step_id", f"step_{i}"),
                 "type": s.get("type", "tool"),
-                "status": s.get("status", "UNKNOWN"),
+                "status": str(s.get("status", "UNKNOWN")).split(".")[-1],
                 "output": str(s.get("output", "")),
                 "retries": s.get("retry_count", 0),
                 "duration_ms": s.get("duration_ms", 0),
             }
         )
 
+    trace_id = trace_dict.get("trace_id", "")
+    raw_status = str(trace_dict.get("status", "FAILED"))
+    status = raw_status.split(".")[-1] if "." in raw_status else raw_status
     return {
-        "trace_id": trace_dict.get("trace_id", ""),
         "trace": {
+            "trace_id": trace_id,
             "program_name": trace_dict.get("program_name", ""),
-            "status": trace_dict.get("status", "FAILED"),
+            "status": status,
             "steps": mapped_steps,
             "final_step": mapped_steps[-1]["step_id"] if mapped_steps else "",
             "escalations": 0,
