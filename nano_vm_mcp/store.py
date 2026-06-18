@@ -83,6 +83,15 @@ def _init_schema(con: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_transition_stats_program
             ON transition_stats (program_name);
+        CREATE TABLE IF NOT EXISTS vm_sessions (
+            session_id     TEXT PRIMARY KEY,
+            program_id     TEXT NOT NULL,
+            cursor_step_id TEXT NOT NULL,
+            state_json     TEXT NOT NULL,
+            trace_json     TEXT NOT NULL,
+            created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+            updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
     """)
     con.commit()
 
@@ -430,3 +439,60 @@ class ProgramStore:
                 (program_name,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # VmSessions — persistent suspend/resume cursor (sprint_5_mcp_vmstep)
+    # ------------------------------------------------------------------
+    #
+    # ExecutionVM's own CursorRepository (InMemoryCursorRepository) lives
+    # inside a single ExecutionVM instance and dies with it. Each MCP tool
+    # call constructs a fresh ExecutionVM (see tools._build_vm) — so the
+    # gateway needs its own persistence layer to span suspend (call N) and
+    # resume (call N+1). program_id is stored alongside the cursor because
+    # resume_with_program() requires the Program object again; the cursor
+    # alone (step_id, state, trace) is not sufficient to resume.
+
+    def save_vm_session(
+        self,
+        session_id: str,
+        program_id: str,
+        cursor_step_id: str,
+        state: dict[str, Any],
+        trace: dict[str, Any],
+    ) -> None:
+        with self._lock:
+            self._con.execute(
+                """INSERT OR REPLACE INTO vm_sessions
+                       (session_id, program_id, cursor_step_id, state_json,
+                        trace_json, updated_at)
+                   VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))""",
+                (session_id, program_id, cursor_step_id, json.dumps(state), json.dumps(trace)),
+            )
+            self._con.commit()
+
+    def get_vm_session(self, session_id: str) -> dict[str, Any] | None:
+        row = self._con.execute(
+            """SELECT session_id, program_id, cursor_step_id, state_json,
+                      trace_json, created_at, updated_at
+               FROM vm_sessions WHERE session_id = ?""",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "session_id": row["session_id"],
+            "program_id": row["program_id"],
+            "cursor_step_id": row["cursor_step_id"],
+            "state": json.loads(row["state_json"]),
+            "trace": json.loads(row["trace_json"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def delete_vm_session(self, session_id: str) -> bool:
+        with self._lock:
+            cur = self._con.execute(
+                "DELETE FROM vm_sessions WHERE session_id = ?", (session_id,)
+            )
+            self._con.commit()
+            return cur.rowcount > 0

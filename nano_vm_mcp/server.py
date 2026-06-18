@@ -122,6 +122,52 @@ async def list_tools() -> list[Tool]:
                 "required": ["program_id"],
             },
         ),
+        Tool(
+            name="vm_step",
+            description=(
+                "One channel-adapter turn: (session_id, input) -> output. "
+                "First call: pass 'program' to start a new session; returns a "
+                "session_id. Later calls: pass 'session_id' + 'input' to resume "
+                "a suspended run. Response field 'suspended' tells the caller "
+                "whether to call again (true) or treat the result as terminal "
+                "(false)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": (
+                            "Session/trace id from a previous vm_step call. "
+                            "Omit to start a new session."
+                        ),
+                        "default": "",
+                    },
+                    "input": {
+                        "type": "object",
+                        "description": (
+                            "Turn input: initial context (new session) or "
+                            "resume payload (existing session)."
+                        ),
+                    },
+                    "program": {
+                        "type": "object",
+                        "description": (
+                            "nano_vm.Program JSON. Required to start a new "
+                            "session, omit to resume."
+                        ),
+                    },
+                    "save_as": {
+                        "type": "string",
+                        "description": (
+                            "Optional name to save the program under (new session only)."
+                        ),
+                        "default": "",
+                    },
+                },
+                "required": [],
+            },
+        ),
     ]
 
 

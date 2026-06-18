@@ -154,6 +154,32 @@ class DeleteProgramHandler(ToolHandler):
         return _ok(await _tools.delete_program(store, arguments["program_id"]))
 
 
+class VmStepHandler(ToolHandler):
+    """sprint_5_mcp_vmstep: one channel-adapter turn per call.
+
+    Scope cut (explicit, see DECISIONS.md 2026-06-18): no circuit_breaker,
+    no PROGRAM_IPN_HANDLER — those remain in sprint_5_mcp_pending. This
+    handler is unguarded by GovernedToolExecutor (no capability gate on the
+    session-resume path) — adding governance parity with run_program is a
+    follow-up, not a blocker for the channel-adapter proof.
+    """
+
+    async def _try_handle(
+        self, name: str, arguments: dict[str, Any], store: ProgramStore
+    ) -> list[TextContent] | None:
+        if name != "vm_step":
+            return None
+        return _ok(
+            await _tools.vm_step(
+                store,
+                session_id=arguments.get("session_id", "") or "",
+                input_data=arguments.get("input"),
+                program=arguments.get("program"),
+                save_as=arguments.get("save_as", "") or "",
+            )
+        )
+
+
 class UnknownToolHandler(ToolHandler):
     """Terminal handler: always matches, returns error for unregistered tools."""
 
@@ -482,6 +508,6 @@ def build_chain(policy: PolicySnapshot | None = None) -> ToolHandler:
     head.set_successor(GetTraceHandler()).set_successor(DebugTraceHandler()).set_successor(
         ListProgramsHandler()
     ).set_successor(GetProgramHandler()).set_successor(DeleteProgramHandler()).set_successor(
-        UnknownToolHandler()
-    )
+        VmStepHandler()
+    ).set_successor(UnknownToolHandler())
     return head
