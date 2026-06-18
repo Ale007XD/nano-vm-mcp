@@ -153,8 +153,7 @@ async def list_tools() -> list[Tool]:
                     "program": {
                         "type": "object",
                         "description": (
-                            "nano_vm.Program JSON. Required to start a new "
-                            "session, omit to resume."
+                            "nano_vm.Program JSON. Required to start a new session, omit to resume."
                         ),
                     },
                     "save_as": {

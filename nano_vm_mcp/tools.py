@@ -335,9 +335,7 @@ class _GatewayCursorRepository:
         self._store = store
         self._program_id = program_id
 
-    async def save(
-        self, trace_id: str, step_id: str, state: Any, trace: Any
-    ) -> None:
+    async def save(self, trace_id: str, step_id: str, state: Any, trace: Any) -> None:
         self._store.save_vm_session(
             session_id=trace_id,
             program_id=self._program_id,
@@ -478,8 +476,7 @@ async def vm_step(
     except ValidationError as exc:
         return {
             "error": (
-                f"Stored program '{program_id}' is no longer valid: "
-                f"{exc.error_count()} error(s)"
+                f"Stored program '{program_id}' is no longer valid: {exc.error_count()} error(s)"
             ),
             "detail": str(exc),
         }

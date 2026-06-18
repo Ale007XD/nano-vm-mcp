@@ -491,8 +491,6 @@ class ProgramStore:
 
     def delete_vm_session(self, session_id: str) -> bool:
         with self._lock:
-            cur = self._con.execute(
-                "DELETE FROM vm_sessions WHERE session_id = ?", (session_id,)
-            )
+            cur = self._con.execute("DELETE FROM vm_sessions WHERE session_id = ?", (session_id,))
             self._con.commit()
             return cur.rowcount > 0
