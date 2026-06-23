@@ -20,6 +20,7 @@ from nano_vm.models import PolicySnapshot
 from pydantic import BaseModel
 
 from . import tools as _tools
+from . import vmstep as _vmstep
 from .store import ProgramStore
 
 
@@ -155,29 +156,38 @@ class DeleteProgramHandler(ToolHandler):
 
 
 class VmStepHandler(ToolHandler):
-    """sprint_5_mcp_vmstep: one channel-adapter turn per call.
-
-    Scope cut (explicit, see DECISIONS.md 2026-06-18): no circuit_breaker,
-    no PROGRAM_IPN_HANDLER — those remain in sprint_5_mcp_pending. This
-    handler is unguarded by GovernedToolExecutor (no capability gate on the
-    session-resume path) — adding governance parity with run_program is a
-    follow-up, not a blocker for the channel-adapter proof.
     """
+    vm_step MCP tool handler (sprint_5_mcp_vmstep / sprint_channel_adapter_core).
+
+    TOOL-step callables cannot travel over the MCP JSON-RPC wire as Python
+    objects -- arguments arrive as JSON. This handler's `tools` registry is
+    therefore fixed at server construction time (passed into build_chain()),
+    not per-call: every program run through this handler shares the same
+    tool registry, which the gateway process itself owns. A channel adapter
+    importing nano_vm_mcp as a library in-process (the support-bot pilot's
+    deployment model) and an MCP server reached over stdio/SSE both end up
+    with the same constraint -- only the latter is forced into it by the
+    wire protocol, but the constructor-level registry works for both.
+    """
+
+    def __init__(self, tools: dict[str, Any] | None = None) -> None:
+        super().__init__()
+        self._tools = tools
 
     async def _try_handle(
         self, name: str, arguments: dict[str, Any], store: ProgramStore
     ) -> list[TextContent] | None:
         if name != "vm_step":
             return None
-        return _ok(
-            await _tools.vm_step(
-                store,
-                session_id=arguments.get("session_id", "") or "",
-                input_data=arguments.get("input"),
-                program=arguments.get("program"),
-                save_as=arguments.get("save_as", "") or "",
-            )
+        result = await _vmstep.vm_step(
+            store,
+            session_id=arguments["session_id"],
+            input=arguments.get("input"),
+            program=arguments.get("program"),
+            save_as=arguments.get("save_as", ""),
+            tools=self._tools,
         )
+        return _ok(result)
 
 
 class UnknownToolHandler(ToolHandler):
@@ -502,12 +512,20 @@ class GovernedRunProgramHandler(ToolHandler):
 # ---------------------------------------------------------------------------
 
 
-def build_chain(policy: PolicySnapshot | None = None) -> ToolHandler:
-    """Construct and return the head of the tool-dispatch chain."""
+def build_chain(
+    policy: PolicySnapshot | None = None,
+    tools: dict[str, Any] | None = None,
+) -> ToolHandler:
+    """Construct and return the head of the tool-dispatch chain.
+
+    `tools`: TOOL-step callable registry, passed through to VmStepHandler.
+    Fixed at chain-construction time (see VmStepHandler docstring) — every
+    vm_step() call through this chain shares the same registry.
+    """
     head: ToolHandler = GovernedRunProgramHandler(policy=policy)
     head.set_successor(GetTraceHandler()).set_successor(DebugTraceHandler()).set_successor(
         ListProgramsHandler()
     ).set_successor(GetProgramHandler()).set_successor(DeleteProgramHandler()).set_successor(
-        VmStepHandler()
+        VmStepHandler(tools=tools)
     ).set_successor(UnknownToolHandler())
     return head
