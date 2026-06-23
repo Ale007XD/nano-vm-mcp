@@ -62,9 +62,7 @@ async def test_vm_step_routed_through_chain(store):
 
 async def test_vm_step_resume_through_chain(store):
     chain = build_chain(tools=TOOLS)
-    await chain.handle(
-        "vm_step", {"session_id": "chat1", "input": {}, "program": PROGRAM}, store
-    )
+    await chain.handle("vm_step", {"session_id": "chat1", "input": {}, "program": PROGRAM}, store)
     result = await chain.handle(
         "vm_step", {"session_id": "chat1", "input": {"name": "Sasha"}}, store
     )

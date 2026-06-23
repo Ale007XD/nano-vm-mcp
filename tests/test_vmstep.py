@@ -152,9 +152,7 @@ async def test_no_suspend_program_does_not_record_session(store):
 
 
 async def test_resume_completes_suspended_trace(store):
-    r1 = await vm_step(
-        store, session_id="sess1", input={}, program=SUSPEND_PROGRAM, tools=TOOLS
-    )
+    r1 = await vm_step(store, session_id="sess1", input={}, program=SUSPEND_PROGRAM, tools=TOOLS)
     assert r1["suspended"] is True
 
     r2 = await vm_step(store, session_id="sess1", input={"name": "Alex"}, tools=TOOLS)
@@ -180,12 +178,8 @@ async def test_resume_without_program_reuses_stored_program(store):
 
 async def test_two_sessions_are_independent(store):
     """Two different session_ids must not share trace_id/program_id state."""
-    r1a = await vm_step(
-        store, session_id="sess_a", input={}, program=SUSPEND_PROGRAM, tools=TOOLS
-    )
-    r1b = await vm_step(
-        store, session_id="sess_b", input={}, program=SUSPEND_PROGRAM, tools=TOOLS
-    )
+    r1a = await vm_step(store, session_id="sess_a", input={}, program=SUSPEND_PROGRAM, tools=TOOLS)
+    r1b = await vm_step(store, session_id="sess_b", input={}, program=SUSPEND_PROGRAM, tools=TOOLS)
     assert r1a["trace_id"] != r1b["trace_id"]
 
     r2a = await vm_step(store, session_id="sess_a", input={"name": "A"}, tools=TOOLS)
