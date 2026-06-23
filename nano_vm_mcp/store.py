@@ -483,9 +483,7 @@ class ProgramStore:
     def delete_vm_session(self, session_id: str) -> bool:
         """Removes the session mapping. Returns True if a row existed."""
         with self._lock:
-            cur = self._con.execute(
-                "DELETE FROM vm_sessions WHERE session_id = ?", (session_id,)
-            )
+            cur = self._con.execute("DELETE FROM vm_sessions WHERE session_id = ?", (session_id,))
             self._con.commit()
             return cur.rowcount > 0
 
@@ -497,9 +495,7 @@ class ProgramStore:
     # StateContext/Trace (de)serialization on either side of these calls.
     # ------------------------------------------------------------------
 
-    def save_vm_cursor(
-        self, trace_id: str, step_id: str, state_json: str, trace_json: str
-    ) -> None:
+    def save_vm_cursor(self, trace_id: str, step_id: str, state_json: str, trace_json: str) -> None:
         with self._lock:
             self._con.execute(
                 """INSERT OR REPLACE INTO vm_cursors
@@ -520,8 +516,6 @@ class ProgramStore:
 
     def delete_vm_cursor(self, trace_id: str) -> bool:
         with self._lock:
-            cur = self._con.execute(
-                "DELETE FROM vm_cursors WHERE trace_id = ?", (trace_id,)
-            )
+            cur = self._con.execute("DELETE FROM vm_cursors WHERE trace_id = ?", (trace_id,))
             self._con.commit()
             return cur.rowcount > 0

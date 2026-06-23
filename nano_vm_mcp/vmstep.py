@@ -32,6 +32,7 @@ Two translation problems this module solves
    persists StateContext and Trace as JSON in ProgramStore.vm_cursors,
    surviving both across calls and across process restarts.
 """
+
 from __future__ import annotations
 
 import os
@@ -58,9 +59,7 @@ class SQLiteCursorRepository:
     def __init__(self, store: ProgramStore) -> None:
         self._store = store
 
-    async def save(
-        self, trace_id: str, step_id: str, state: StateContext, trace: Trace
-    ) -> None:
+    async def save(self, trace_id: str, step_id: str, state: StateContext, trace: Trace) -> None:
         self._store.save_vm_cursor(
             trace_id=trace_id,
             step_id=step_id,
@@ -116,9 +115,7 @@ def _build_vm_with_cursor(
         return (
             "LiteLLMAdapter is not available. Install it with: pip install 'nano-vm-mcp[litellm]'"
         )
-    return ExecutionVM(
-        llm=LiteLLMAdapter(model), tools=tools, cursor_repository=cursor_repository
-    )
+    return ExecutionVM(llm=LiteLLMAdapter(model), tools=tools, cursor_repository=cursor_repository)
 
 
 async def vm_step(
