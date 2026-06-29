@@ -455,6 +455,34 @@ The kernel is MIT-licensed, independently versioned on PyPI (`llm-nano-vm`), and
 
 ---
 
+## Diagnostic Integration — Agent Debugger
+
+[#diagnostic-integration--agent-debugger](#diagnostic-integration--agent-debugger)
+
+`debug_trace` is an opt-in MCP tool that sends a completed `Trace` to an external [Agent Debugger](https://github.com/arunkumarmolugu) service for automated failure diagnosis. It does not run by default — no token, no call.
+
+**Auto-diagnostic on `FAILED`:** when a `run_program` execution ends with `status=FAILED`, `GovernedRunProgramHandler` automatically forwards the trace for diagnosis if `AGENT_DEBUGGER_TOKEN` is set. No extra call needed from the MCP client.
+
+```bash
+export AGENT_DEBUGGER_TOKEN=your-token
+export AGENT_DEBUGGER_URL=https://agent-debugger-production.up.railway.app
+```
+
+| Variable                | Default   | Description                                   |
+| ----------------------- | --------- | ---------------------------------------------- |
+| `AGENT_DEBUGGER_TOKEN`  | *(unset)* | Enables diagnostic calls; absent = no-op       |
+| `AGENT_DEBUGGER_URL`    | *(unset)* | Agent Debugger service endpoint                |
+
+```python
+# Manual call — diagnose any stored trace on demand
+result = await session.call_tool("debug_trace", {"trace_id": result["trace_id"]})
+# Returns: failure classification + suggested root cause from Agent Debugger
+```
+
+**Without `AGENT_DEBUGGER_TOKEN` set:** the diagnostic call is silently skipped — execution is never blocked by an unavailable or unconfigured debugger.
+
+---
+
 ## Contact & Support
 
 **Author:** [@ale007xd](https://t.me/ale007xd) on Telegram · [@ale007xd](https://x.com/ale007xd) on X
