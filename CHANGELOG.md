@@ -6,6 +6,52 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.4.6] - 2026-06-29
+
+### Fixed
+- **vm_step() trace visibility (defect_2)**: `vmstep.py::vm_step` now calls
+  `store.save_trace()` unconditionally on every branch (first-run terminal,
+  first-run suspended, resume terminal, resume suspended) via new
+  `_save_trace()` helper. Previously, executions reaching MCP clients through
+  `vm_step()` left no trace in `traces`/`execution_traces` — `get_trace()`
+  returned `None`, Agent Debugger auto-diagnostic and TraceAnalyzer metrics
+  (rollback_density, tool_churn_rate, transition_entropy) were blind to any
+  run that went through a channel adapter using `vm_step()`. The cursor
+  bridge itself (suspend/resume via `vm_sessions`/`vm_cursors`) was never
+  broken — only trace persistence was missing.
+  Verified: VS-19..23 (5 new tests), 4/5 RED on unpatched snapshot confirming
+  regression-catching power.
+
+### Removed
+- **Dead code (defect_1)**: `tools.py::vm_step` + `_GatewayCursorRepository`
+  + `_trace_result()` deleted (511→303 lines). This was an abandoned parallel
+  implementation, unreachable through any MCP tool call (`handlers.py::VmStepHandler`
+  dispatches exclusively to `vmstep.py::vm_step`), and broken — calling it raised
+  `TypeError: ProgramStore.save_vm_session() got an unexpected keyword argument
+  'cursor_step_id'` on every suspend, since `store.py` had already been rewritten
+  for `vmstep.py`'s split schema (`vm_sessions`/`vm_cursors`) while this path still
+  targeted the old 5-argument signature.
+- `tests/test_sprint5_mcp_vmstep.py` (VS-01..18) removed — superseded by
+  `vmstep.py`'s own suite (`test_vmstep.py`, `test_vmstep_handler.py`,
+  `test_store_vmstep.py`) plus VS-19..23.
+
+### Notes
+- Two parallel `vm_step()` implementations had coexisted in source since
+  `sprint_5_mcp_vmstep`; only `vmstep.py`'s was ever live. This release
+  removes the dead one and fixes the live one's trace-persistence gap.
+- mypy --ignore-missing-imports: 3 pre-existing CI errors (line 339, in the
+  now-removed block) → 0 errors on the full 4-file package post-fix.
+- Live CI: 159 passed, 0 failures. Coverage: `store.py` 100%, `tools.py` 84%,
+  `vmstep.py` 80%.
+- `nano_vm/validator.py` shows 0% coverage in this repo's CI run — expected,
+  not a regression: `ProgramValidator` is exercised in `nano-vm-core` CI
+  (476/476), not duplicated here.
+
+### Impact for downstream
+- `sprint_channel_adapter_core` and `sprint_support_telegram_demo` fully
+  unblocked — both depended on `vm_step()` trace visibility.
+- No breaking change to the public `vm_step()` signature or response shape.
+
 ## [0.4.5] — 2026-06-12
 
 ### Fixed

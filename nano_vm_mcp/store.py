@@ -83,6 +83,20 @@ def _init_schema(con: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_transition_stats_program
             ON transition_stats (program_name);
+        CREATE TABLE IF NOT EXISTS vm_sessions (
+            session_id   TEXT PRIMARY KEY,
+            trace_id     TEXT NOT NULL,
+            program_id   TEXT NOT NULL,
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+            updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE TABLE IF NOT EXISTS vm_cursors (
+            trace_id     TEXT PRIMARY KEY,
+            step_id      TEXT NOT NULL,
+            state_json   TEXT NOT NULL,
+            trace_json   TEXT NOT NULL,
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
     """)
     con.commit()
 
@@ -430,3 +444,78 @@ class ProgramStore:
                 (program_name,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # VmSessions — session_id -> (trace_id, program_id) bridge for vm_step()
+    # (sprint_5_mcp_vmstep). Channel adapters address a session by their own
+    # session_id (e.g. a Telegram chat_id); the engine's CursorRepository
+    # addresses suspended cursors by trace.trace_id, which is generated
+    # internally on every vm.run() call and not caller-supplied. This table
+    # is the translation layer: _GatewayCursorRepository looks up trace_id
+    # by session_id before calling the real CursorRepository operations, and
+    # records the mapping (plus program_id, needed again for
+    # resume_with_program()) the first time a session suspends.
+    # ------------------------------------------------------------------
+
+    def save_vm_session(self, session_id: str, trace_id: str, program_id: str) -> None:
+        """Upsert the session_id -> (trace_id, program_id) mapping."""
+        with self._lock:
+            self._con.execute(
+                """INSERT INTO vm_sessions (session_id, trace_id, program_id, updated_at)
+                   VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                   ON CONFLICT(session_id) DO UPDATE SET
+                       trace_id   = excluded.trace_id,
+                       program_id = excluded.program_id,
+                       updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')""",
+                (session_id, trace_id, program_id),
+            )
+            self._con.commit()
+
+    def get_vm_session(self, session_id: str) -> dict[str, Any] | None:
+        """Returns {"session_id", "trace_id", "program_id"} or None if not found."""
+        row = self._con.execute(
+            """SELECT session_id, trace_id, program_id
+               FROM vm_sessions WHERE session_id = ?""",
+            (session_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def delete_vm_session(self, session_id: str) -> bool:
+        """Removes the session mapping. Returns True if a row existed."""
+        with self._lock:
+            cur = self._con.execute("DELETE FROM vm_sessions WHERE session_id = ?", (session_id,))
+            self._con.commit()
+            return cur.rowcount > 0
+
+    # ------------------------------------------------------------------
+    # VmCursors — SQLite-backed persistence for suspended ExecutionVM
+    # cursors (sprint_5_mcp_vmstep). Stores raw JSON only; this module has
+    # no nano_vm type dependency by design (mirrors traces/programs storage
+    # pattern above). vmstep.SQLiteCursorRepository is responsible for
+    # StateContext/Trace (de)serialization on either side of these calls.
+    # ------------------------------------------------------------------
+
+    def save_vm_cursor(self, trace_id: str, step_id: str, state_json: str, trace_json: str) -> None:
+        with self._lock:
+            self._con.execute(
+                """INSERT OR REPLACE INTO vm_cursors
+                       (trace_id, step_id, state_json, trace_json)
+                   VALUES (?, ?, ?, ?)""",
+                (trace_id, step_id, state_json, trace_json),
+            )
+            self._con.commit()
+
+    def load_vm_cursor(self, trace_id: str) -> dict[str, Any] | None:
+        """Returns {"step_id", "state_json", "trace_json"} or None if not found."""
+        row = self._con.execute(
+            """SELECT step_id, state_json, trace_json
+               FROM vm_cursors WHERE trace_id = ?""",
+            (trace_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def delete_vm_cursor(self, trace_id: str) -> bool:
+        with self._lock:
+            cur = self._con.execute("DELETE FROM vm_cursors WHERE trace_id = ?", (trace_id,))
+            self._con.commit()
+            return cur.rowcount > 0

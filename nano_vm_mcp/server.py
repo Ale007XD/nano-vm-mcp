@@ -22,6 +22,13 @@ logger = logging.getLogger(__name__)
 _DB_PATH = os.getenv("NANO_VM_MCP_DB", "nano_vm_mcp.db")
 
 _store = ProgramStore(_DB_PATH)
+# vm_step's tools registry is fixed at process start for the stdio/SSE server
+# (see handlers.VmStepHandler docstring — TOOL-step callables cannot travel
+# over the MCP wire as JSON). The stdio/SSE server has no Python-importable
+# caller to register tools from, so it runs with an empty registry unless a
+# future deployment wires one in via a server-side plugin mechanism. Library
+# callers (e.g. the support-bot pilot, importing nano_vm_mcp in-process) use
+# handlers.build_chain(tools=...) directly instead of this module's _chain.
 _chain = build_chain()
 
 
@@ -120,6 +127,40 @@ async def list_tools() -> list[Tool]:
                     "program_id": {"type": "string"},
                 },
                 "required": ["program_id"],
+            },
+        ),
+        Tool(
+            name="vm_step",
+            description=(
+                "(session_id, input) -> output for channel adapters. First call for "
+                "a session must include 'program'; the trace runs and suspends/finishes. "
+                "Subsequent calls for the same session_id resume the suspended trace with "
+                "'input' as the new turn's payload — 'program' may be omitted. Response "
+                "includes 'suspended': bool signalling whether the caller must call "
+                "vm_step() again to continue the conversation."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Caller-owned conversation identifier (e.g. a chat_id).",
+                    },
+                    "input": {
+                        "type": "object",
+                        "description": "Context (first call) or resume payload (later calls).",
+                    },
+                    "program": {
+                        "type": "object",
+                        "description": "nano_vm.Program JSON. Required on first call.",
+                    },
+                    "save_as": {
+                        "type": "string",
+                        "description": "Optional name to save the program under.",
+                        "default": "",
+                    },
+                },
+                "required": ["session_id"],
             },
         ),
     ]
