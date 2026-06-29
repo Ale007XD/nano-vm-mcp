@@ -21,12 +21,10 @@ from typing import Any
 
 import pytest
 from nano_vm import Program
-from nano_vm.adapters import MockLLMAdapter
 from nano_vm.models import OnError, Step, StepType
 
 from nano_vm_mcp.store import ProgramStore
 from nano_vm_mcp.vmstep import vm_step
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -173,9 +171,7 @@ async def test_vs20_first_run_suspended_persists_trace(store: ProgramStore) -> N
     # argument), a separate field from trace_json's embedded copy.
     assert persisted["status"] == "suspended"
 
-    raw_row = store._con.execute(
-        "SELECT status FROM traces WHERE id = ?", (trace_id,)
-    ).fetchone()
+    raw_row = store._con.execute("SELECT status FROM traces WHERE id = ?", (trace_id,)).fetchone()
     assert raw_row["status"] == "TraceStatus.SUSPENDED", (
         "SQL status column should hold str(trace.status) verbatim, matching "
         "tools.py::run_program's save_trace() call shape exactly."
