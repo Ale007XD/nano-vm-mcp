@@ -45,7 +45,7 @@ from nano_vm.vm import CursorRepository, WebhookEvent
 from pydantic import ValidationError
 
 from .store import ProgramStore
-from .tools import _has_llm_steps
+from .tools import _extract_cost, _has_llm_steps
 
 
 class SQLiteCursorRepository:
@@ -77,6 +77,27 @@ class SQLiteCursorRepository:
 
     async def delete(self, trace_id: str) -> None:
         self._store.delete_vm_cursor(trace_id)
+
+
+def _save_trace(store: ProgramStore, trace_id: str, program_id: str, trace: Trace) -> None:
+    """
+    Persist `trace` via store.save_trace(), mirroring tools.py::run_program's
+    call shape exactly (same field sources, same str(trace.status) form —
+    NOT the .split(".")[-1]-normalized status used for vm_step()'s own
+    return value, which is a separate concern for the caller-facing field
+    only). Called on every vm_step() branch (first-run and resume,
+    terminal and suspended) so get_trace()/Agent Debugger/TraceAnalyzer are
+    no longer blind to vm_step-routed executions (DECISIONS.md 2026-06-29
+    nano-vm-mcp-v0.4.6-snapshot-audit, defect_2).
+    """
+    store.save_trace(
+        trace_id=trace_id,
+        program_id=program_id,
+        status=str(trace.status),
+        steps_count=len(trace.steps) if hasattr(trace, "steps") else 0,
+        total_cost=_extract_cost(trace),
+        trace=trace.model_dump(mode="json"),
+    )
 
 
 def _build_vm_with_cursor(
@@ -199,6 +220,8 @@ async def vm_step(
         status = str(trace.status).split(".")[-1]
         suspended = status == "SUSPENDED"
 
+        _save_trace(store, trace_id, program_id, trace)
+
         if suspended:
             store.save_vm_session(session_id, trace_id, program_id)
 
@@ -246,6 +269,8 @@ async def vm_step(
 
     status = str(trace.status).split(".")[-1]
     suspended = status == "SUSPENDED"
+
+    _save_trace(store, str(trace.trace_id), program_id, trace)
 
     if suspended:
         store.save_vm_session(session_id, str(trace.trace_id), program_id)
