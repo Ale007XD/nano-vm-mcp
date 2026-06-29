@@ -300,4 +300,3 @@ async def delete_program(store: ProgramStore, program_id: str) -> dict[str, Any]
     if not ok:
         return {"error": f"Program '{program_id}' not found"}
     return {"deleted": True, "program_id": program_id}
-
