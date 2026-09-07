@@ -186,15 +186,14 @@ result = await session.call_tool(
         "program": {
             "name": "payment_pipeline",
             "steps": [
-                {"id": "validate",  "type": "tool", "tool": "validate_amount"},
-                {"id": "reserve",   "type": "tool", "tool": "reserve_funds"},
-                {"id": "capture",   "type": "tool", "tool": "capture_payment"},
-                {"id": "receipt",   "type": "tool", "tool": "send_receipt",
-                 "is_terminal": True},
-            ]
+                {"id": "validate", "type": "tool", "tool": "validate_amount"},
+                {"id": "reserve", "type": "tool", "tool": "reserve_funds"},
+                {"id": "capture", "type": "tool", "tool": "capture_payment"},
+                {"id": "receipt", "type": "tool", "tool": "send_receipt", "is_terminal": True},
+            ],
         },
         "idempotency_key": "order-abc-123",
-    }
+    },
 )
 # Returns: trace_id, status, step count, cost
 # Every step: GovernanceEnvelope in SQLite — tamper-evident, append-only
@@ -219,16 +218,22 @@ Pass `idempotency_key` to `run_program` to guarantee that a program executes at 
 
 ```python
 # First call — executes normally, result cached
-result = await session.call_tool("run_program", {
-    "program": program,
-    "idempotency_key": "payment-order-xyz-001",
-})
+result = await session.call_tool(
+    "run_program",
+    {
+        "program": program,
+        "idempotency_key": "payment-order-xyz-001",
+    },
+)
 
 # Second call with same key — returns cached result immediately, no re-execution
-result = await session.call_tool("run_program", {
-    "program": program,
-    "idempotency_key": "payment-order-xyz-001",
-})
+result = await session.call_tool(
+    "run_program",
+    {
+        "program": program,
+        "idempotency_key": "payment-order-xyz-001",
+    },
+)
 ```
 
 **Crash recovery:** if the process crashes after program start but before completion (`status=pending`), the next call with the same key overwrites the pending entry and re-executes. Once the result is written as `status=success`, it is immutable for that key.
@@ -328,8 +333,8 @@ These are orthogonal concerns. The runtime enforces state determinism; you contr
     "type": "llm",
     "prompt": "Is this a valid refund request? Reply ONLY with: yes or no",
     "output_key": "decision",
-    "allowed_outputs": ["yes", "no"],   # runtime enforcement — not a prompt hint
-    "on_error": "skip",                 # output → "yes" (first element) on mismatch
+    "allowed_outputs": ["yes", "no"],  # runtime enforcement — not a prompt hint
+    "on_error": "skip",  # output → "yes" (first element) on mismatch
 }
 ```
 
@@ -410,11 +415,11 @@ The FSM runtime introduces near-zero overhead. The bottleneck is always the LLM 
 ## Observability
 
 ```python
-trace.trace_id          # UUID4 — stable for OTel propagation
-trace.status            # SUCCESS | FAILED | SUSPENDED | BUDGET_EXCEEDED | STALLED
+trace.trace_id  # UUID4 — stable for OTel propagation
+trace.status  # SUCCESS | FAILED | SUSPENDED | BUDGET_EXCEEDED | STALLED
 trace.final_output
-trace.steps             # per-step: step_id, status, duration_ms, usage
-trace.state_snapshots   # list[(step_index, sha256_hex)]
+trace.steps  # per-step: step_id, status, duration_ms, usage
+trace.state_snapshots  # list[(step_index, sha256_hex)]
 ```
 
 Traces are persisted to SQLite and retrievable by `trace_id` across sessions via `get_trace`.
