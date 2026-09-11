@@ -307,9 +307,11 @@ steps = store.get_trace_steps(execution_id="exec-abc-123")
 
 ## Evaluator Blindness by Design
 
-Benchmark research across 10 frontier models found that every model changes behavior when it detects it's being monitored. The best model scored 84% on "acts the same whether watched or not."
+## Evaluator Blindness by Design
 
-The `ProjectionLayer` gives the LLM only a `target=LLM` projection of state. Governance metadata — `GovernanceEnvelope`, `canonical_hash`, `policy_hash`, retry counters — never reaches the prompt. The model cannot observe its own audit trail.
+Evaluator blindness is structural: `GovernanceEnvelope`, `policy_hash`, `canonical_hash`, and retry counters are not part of the FSM state. The LLM only ever sees `ProjectionLayer.project(state, target=LLM)`, so these governance and audit fields are outside the model-visible execution state by construction.
+
+The `ProjectionLayer` gives the LLM only a `target=LLM` projection of state. Governance metadata — `GovernanceEnvelope`, `canonical_hash`, `policy_hash`, and retry counters — never reaches the prompt. The model cannot observe its own audit trail.
 
 **Evaluator blindness is structural, not configured.** It is a consequence of the strict isolation between the kernel and gateway layers.
 
