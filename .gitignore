@@ -10,3 +10,5 @@ build/
 *.db-shm
 nano_vm_mcp/_version.py
 patches/
+.pytest_cache/
+.venv/

@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **vm_step() cancel-wedge**: cancelling a `vm_step()` call in the middle of
+  a resumed turn (client disconnect, `asyncio.wait_for` timeout) no longer
+  poisons the session. The core deletes the suspended cursor before the
+  resumed loop starts, so the surviving `vm_sessions` row used to make every
+  later call for that `session_id` fail with "Already resumed or never
+  suspended". The session row is now removed on cancellation, so the next
+  call starts fresh (`program` required). The cancelled turn itself is not
+  resumable.
+- The partial trace of a cancelled run (status `CANCELLED`) is now persisted
+  and visible through `get_trace()`, on both the first-turn and resume paths.
+  The `CancelledError` is always re-raised.
+
+### Changed
+- `LiteLLMAdapter` is imported from `nano_vm.adapters.litellm_adapter` (the lazy
+  top-level export of llm-nano-vm >=0.8.9 is typed `object` for mypy).
+- Requires `llm-nano-vm>=0.8.10` (`ExecutionVM.crash_trace`, `TraceStatus.CANCELLED`).
+
+---
+
 ## [0.4.6] - 2026-06-29
 
 ### Fixed

@@ -35,6 +35,7 @@ Two translation problems this module solves
 
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 from typing import Any
@@ -100,6 +101,25 @@ def _save_trace(store: ProgramStore, trace_id: str, program_id: str, trace: Trac
     )
 
 
+def _persist_crash_trace(
+    store: ProgramStore, program_id: str, vm: ExecutionVM, trace_id: str | None = None
+) -> None:
+    """
+    Best-effort persistence of the partial Trace the core exposes as
+    ``ExecutionVM.crash_trace`` after an external cancellation (llm-nano-vm
+    >=0.8.10; status CANCELLED). Never raises: this runs inside a
+    CancelledError handler, and an exception here would replace the
+    cancellation the caller must still see.
+    """
+    try:
+        crash = vm.crash_trace
+        if crash is None:
+            return
+        _save_trace(store, trace_id or str(crash.trace_id), program_id, crash)
+    except Exception:  # noqa: BLE001 - must not mask CancelledError
+        pass
+
+
 def _build_vm_with_cursor(
     program_data: dict[str, Any],
     cursor_repository: CursorRepository,
@@ -131,7 +151,7 @@ def _build_vm_with_cursor(
             "and the corresponding API key in your environment."
         )
     try:
-        from nano_vm.adapters import LiteLLMAdapter
+        from nano_vm.adapters.litellm_adapter import LiteLLMAdapter
     except ImportError:
         return (
             "LiteLLMAdapter is not available. Install it with: pip install 'nano-vm-mcp[litellm]'"
@@ -209,6 +229,12 @@ async def vm_step(
 
         try:
             trace = await vm.run(program_obj, context=payload)
+        except asyncio.CancelledError:
+            # No session row exists yet (it is written only after run()
+            # returns), so nothing can be poisoned; keep the partial trace
+            # visible to get_trace()/Agent Debugger and propagate.
+            _persist_crash_trace(store, program_id, vm)
+            raise
         except Exception as exc:
             return {
                 "session_id": session_id,
@@ -260,6 +286,17 @@ async def vm_step(
 
     try:
         trace = await vm.resume_with_program(webhook, program_obj)
+    except asyncio.CancelledError:
+        # The core deletes the suspended cursor BEFORE the resumed loop
+        # starts, so after a cancellation the session row would point at a
+        # cursor that no longer exists and every later vm_step() would fail
+        # with "Already resumed or never suspended" forever. Drop the row
+        # first (this is what un-poisons the session: the next call starts
+        # fresh with `program`), then record the partial trace, then
+        # propagate the cancellation. The suspended turn is NOT resumable.
+        store.delete_vm_session(session_id)
+        _persist_crash_trace(store, program_id, vm, trace_id=trace_id)
+        raise
     except Exception as exc:
         return {
             "session_id": session_id,

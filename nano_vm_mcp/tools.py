@@ -65,7 +65,7 @@ def _build_vm(program_data: dict[str, Any]) -> ExecutionVM | str:
             "and the corresponding API key in your environment."
         )
     try:
-        from nano_vm.adapters import LiteLLMAdapter
+        from nano_vm.adapters.litellm_adapter import LiteLLMAdapter
     except ImportError:
         return (
             "LiteLLMAdapter is not available. Install it with: pip install 'nano-vm-mcp[litellm]'"
