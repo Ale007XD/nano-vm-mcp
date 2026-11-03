@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+---
+
+## [0.4.7] - 2026-11-03
+
 ### Fixed
 - **vm_step() cancel-wedge**: cancelling a `vm_step()` call in the middle of
   a resumed turn (client disconnect, `asyncio.wait_for` timeout) no longer
