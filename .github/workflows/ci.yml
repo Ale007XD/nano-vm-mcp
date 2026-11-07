@@ -99,7 +99,7 @@ jobs:
           "
 
       - name: Ruff check
-        run: python -m ruff check .
+        run: python -m ruff check . && python -m ruff format --check .
 
       - name: Run mypy
         if: ${{ inputs.skip_mypy != true }}
