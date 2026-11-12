@@ -76,8 +76,10 @@ class SQLiteCursorRepository:
         trace = Trace.model_validate_json(row["trace_json"])
         return row["step_id"], state, trace
 
-    async def delete(self, trace_id: str) -> None:
-        self._store.delete_vm_cursor(trace_id)
+    async def delete(self, trace_id: str) -> bool:
+        # store.delete_vm_cursor is a single atomic DELETE; rowcount > 0 means
+        # this call claimed the cursor (core >= 0.8.13 raises ResumeError on False).
+        return self._store.delete_vm_cursor(trace_id)
 
 
 def _save_trace(store: ProgramStore, trace_id: str, program_id: str, trace: Trace) -> None:
