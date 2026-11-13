@@ -12,6 +12,7 @@ nano_vm_mcp/_version.py
 patches/
 .pytest_cache/
 .venv/
+*.bak
 
 # Для Клауда
 CLAUDE.local.md

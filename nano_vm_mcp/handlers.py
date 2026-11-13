@@ -23,6 +23,10 @@ from . import tools as _tools
 from . import vmstep as _vmstep
 from .store import ProgramStore
 
+# A pending key whose owner died is reclaimable after this many seconds (G-30).
+# Must exceed the longest expected program run, otherwise a slow run can be duplicated.
+IDEMPOTENCY_PENDING_LEASE_SECONDS = 3600
+
 
 def _ok(result: Any) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
@@ -401,31 +405,62 @@ class GovernedRunProgramHandler(ToolHandler):
                 }
             )
 
-        # 2. Idempotency check — return cached result if key already succeeded (v0.4.0)
+        # 2. Idempotency: cached success -> return it; otherwise atomically reserve the key.
+        #    A live reservation held by another request -> idempotency_in_flight (no re-run).
         if idempotency_key:
             cached = store.get_idempotency_key(idempotency_key)
             if cached is not None and cached["status"] == "success":
                 cached_result: dict[str, Any] = cached["result_json"] or {}
                 return _ok(cached_result)
-            # Mark as pending before run (prevents duplicate in-flight requests)
-            if cached is None:
-                store.save_idempotency_key(
-                    key=idempotency_key,
-                    execution_id="",
-                    status="pending",
-                    result=None,
-                    expires_at=None,
+            if not store.reserve_idempotency_key(
+                idempotency_key, lease_seconds=IDEMPOTENCY_PENDING_LEASE_SECONDS
+            ):
+                cached = store.get_idempotency_key(idempotency_key)
+                if cached is not None and cached["status"] == "success":
+                    return _ok(cached["result_json"] or {})
+                return _ok(
+                    {
+                        "error": "idempotency_in_flight",
+                        "idempotency_key": idempotency_key,
+                        "detail": (
+                            "A request with this idempotency_key is already being processed. "
+                            "Retry later: the key returns the cached result after success, "
+                            "or can be re-run after a failure."
+                        ),
+                    }
                 )
 
         # 3. Запуск программы
         save_as: str = arguments.get("save_as", "")
-        result = await _tools.run_program(
-            store,
-            program_data,
-            save_as,
-        )
+        try:
+            result = await _tools.run_program(
+                store,
+                program_data,
+                save_as,
+            )
+        except BaseException:
+            # includes CancelledError: release the reservation, then propagate
+            if idempotency_key:
+                try:
+                    store.fail_idempotency_key(idempotency_key)
+                except Exception:
+                    pass
+            raise
 
         trace_id: str | None = result.get("trace_id") if isinstance(result, dict) else None
+
+        # Finalize the key right after the run, before any post-processing can raise.
+        if idempotency_key:
+            if isinstance(result, dict) and trace_id and not result.get("error"):
+                store.save_idempotency_key(
+                    key=idempotency_key,
+                    execution_id=trace_id,
+                    status="success",
+                    result=result,
+                    expires_at=None,
+                )
+            else:
+                store.fail_idempotency_key(idempotency_key)
 
         # 4. TRACE projection + state_context (pre-Sprint4 compat)
         # Note: save_trace is called inside _tools.run_program (tools.py) — no duplicate needed.
@@ -438,16 +473,6 @@ class GovernedRunProgramHandler(ToolHandler):
                     "steps_count": result.get("steps", 0),
                     "projection_target": "TRACE",
                 },
-            )
-
-        # 5. Idempotency key — upsert success after run (v0.4.0)
-        if idempotency_key and trace_id and not result.get("error"):
-            store.save_idempotency_key(
-                key=idempotency_key,
-                execution_id=trace_id,
-                status="success",
-                result=result if isinstance(result, dict) else None,
-                expires_at=None,
             )
 
         # 6. GovernanceEnvelope — строим и сохраняем (Sprint4)

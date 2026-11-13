@@ -5,7 +5,14 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from datetime import datetime, timedelta, timezone
 from typing import Any
+
+
+def _utc_iso(offset_seconds: float = 0.0) -> str:
+    """UTC timestamp in the schema's format (lexicographically comparable)."""
+    t = datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _make_conn(db_path: str) -> sqlite3.Connection:
@@ -327,7 +334,10 @@ class ProgramStore:
         ]
 
     # ------------------------------------------------------------------
-    # IdempotencyKeys — exactly-once guarantee (v0.4.0)
+    # IdempotencyKeys — duplicate suppression for run_program (v0.4.0; reserve/in-flight v0.4.8)
+    # Semantics: reserve -> pending; success -> cached; failed -> retryable; pending past its
+    # lease -> reclaimable. This is NOT an exactly-once guarantee: a process that dies after
+    # tool side effects but before success is recorded may be re-run once the lease expires.
     # ------------------------------------------------------------------
 
     def save_idempotency_key(
@@ -370,8 +380,9 @@ class ProgramStore:
             """SELECT idempotency_key, execution_id, status, result_json,
                       created_at, expires_at
                FROM idempotency_keys
-               WHERE idempotency_key = ?""",
-            (key,),
+               WHERE idempotency_key = ?
+                 AND (expires_at IS NULL OR expires_at > ?)""",
+            (key, _utc_iso()),
         ).fetchone()
         if row is None:
             return None
@@ -384,6 +395,55 @@ class ProgramStore:
             "created_at": row["created_at"],
             "expires_at": row["expires_at"],
         }
+
+    def reserve_idempotency_key(
+        self,
+        key: str,
+        execution_id: str = "",
+        lease_seconds: float | None = None,
+    ) -> bool:
+        """Atomically reserve `key` as 'pending'. True = caller owns the run.
+
+        INSERT OR IGNORE decides the winner by rowcount (also across processes sharing the
+        sqlite file). An existing row is taken over only if it is 'failed' or its
+        expires_at has passed; a live 'pending' or a 'success' row is left untouched
+        (returns False). `lease_seconds` sets expires_at for the pending row, so a crashed
+        owner does not block the key forever.
+        """
+        now = _utc_iso()
+        expires = _utc_iso(lease_seconds) if lease_seconds else None
+        with self._lock:
+            cur = self._con.execute(
+                """INSERT OR IGNORE INTO idempotency_keys
+                       (idempotency_key, execution_id, status, result_json, expires_at)
+                   VALUES (?, ?, 'pending', NULL, ?)""",
+                (key, execution_id, expires),
+            )
+            if cur.rowcount == 1:
+                self._con.commit()
+                return True
+            cur = self._con.execute(
+                """UPDATE idempotency_keys
+                   SET execution_id = ?, status = 'pending', result_json = NULL,
+                       created_at = ?, expires_at = ?
+                   WHERE idempotency_key = ?
+                     AND (status = 'failed'
+                          OR (expires_at IS NOT NULL AND expires_at <= ?))""",
+                (execution_id, now, expires, key, now),
+            )
+            self._con.commit()
+            return cur.rowcount == 1
+
+    def fail_idempotency_key(self, key: str) -> bool:
+        """Mark a 'pending' key 'failed' (retryable). Never touches a 'success' row."""
+        with self._lock:
+            cur = self._con.execute(
+                """UPDATE idempotency_keys SET status = 'failed', expires_at = NULL
+                   WHERE idempotency_key = ? AND status = 'pending'""",
+                (key,),
+            )
+            self._con.commit()
+            return cur.rowcount == 1
 
     def delete_idempotency_key(self, key: str) -> bool:
         """

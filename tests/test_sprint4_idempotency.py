@@ -126,26 +126,48 @@ def handler(store: ProgramStore):  # type: ignore[no-untyped-def]
 
 
 @pytest.mark.asyncio
-async def test_ip06_pending_status_run_proceeds(store: ProgramStore, program_data: dict) -> None:
-    """IP-06: status=pending → run proceeds (not cached)."""
+async def test_ip06_live_pending_is_in_flight_not_rerun(
+    store: ProgramStore, program_data: dict
+) -> None:
+    """IP-06 (revised for G-30): a live 'pending' key is a reservation -> idempotency_in_flight,
+    the program is NOT run again. (Old contract 'pending -> run proceeds' was the G-30 defect.)"""
+    import json
+
     from nano_vm_mcp.handlers import GovernedRunProgramHandler
 
     store.save_idempotency_key(
-        key="key-06",
-        execution_id="",
-        status="pending",
-        result=None,
-        expires_at=None,
+        key="key-06", execution_id="", status="pending", result=None, expires_at=None
     )
     h = GovernedRunProgramHandler(policy=None)
     result = await h.handle(
         "run_program", {"program": program_data, "idempotency_key": "key-06"}, store
     )
+    data = json.loads(result[0].text)
+    assert data.get("error") == "idempotency_in_flight"
+    row = store.get_idempotency_key("key-06")
+    assert row is not None and row["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_ip06b_expired_pending_run_proceeds(store: ProgramStore, program_data: dict) -> None:
+    """IP-06b (G-30): pending past its lease (crashed owner) is reclaimed and the run proceeds."""
     import json
 
+    from nano_vm_mcp.handlers import GovernedRunProgramHandler
+
+    store.save_idempotency_key(
+        key="key-06b",
+        execution_id="",
+        status="pending",
+        result=None,
+        expires_at="2000-01-01T00:00:00Z",
+    )
+    h = GovernedRunProgramHandler(policy=None)
+    result = await h.handle(
+        "run_program", {"program": program_data, "idempotency_key": "key-06b"}, store
+    )
     data = json.loads(result[0].text)
-    # Should have run (not returned cached) — no "cached" marker, has trace_id or error
-    assert "cached" not in str(data)
+    assert data.get("error") != "idempotency_in_flight"
 
 
 @pytest.mark.asyncio
