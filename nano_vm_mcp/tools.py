@@ -192,7 +192,7 @@ async def run_program(
         store: ProgramStore instance.
         program_data: Raw dict conforming to nano_vm.Program schema.
         save_as: Optional name to persist the program in the store.
-        idempotency_key: Optional key for exactly-once execution guarantee (v0.4.0).
+        idempotency_key: Optional key; reserved atomically by the handler (not exactly-once).
 
     Returns:
         {"trace_id": str, "program_id": str, "status": str,

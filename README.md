@@ -66,7 +66,7 @@ MCP Client / Claude Code
       → GovernedRunProgramHandler   ← PolicySnapshot, idempotency_key, CapabilityRef
           → llm-nano-vm (Kernel)    ← deterministic FSM, ASTEngine, ProjectionLayer
       → GovernanceEnvelope store    ← SQLite WAL, append-only audit log
-      → idempotency_keys store      ← idempotent re-execution across restarts
+      → idempotency_keys store      ← atomic key reservation, cached result after success
         ↓
   deterministic FSM        ← guarantees correctness
         ↓
@@ -128,6 +128,8 @@ NANO_VM_MCP_API_KEY=your-secret-token nano-vm-mcp --transport sse --port 8080
 MCP client URL: `http://<host>:8080/sse`  
 Auth header: `Authorization: Bearer your-secret-token`
 
+The SSE transport **refuses to start** without `NANO_VM_MCP_API_KEY` (see [SSE transport and auth](#sse-transport-and-auth)).
+
 ### Docker Compose
 
 ```yaml
@@ -151,7 +153,7 @@ services:
 
 **Claude Code decides what to do. nano-vm-mcp decides how execution is allowed to proceed.**
 
-Claude Code Dynamic Workflows give you parallel subagents and dynamic orchestration. They don't give you deterministic step execution, replayable audit trails per step, or idempotent re-execution across restarts. nano-vm-mcp closes exactly that gap.
+Claude Code Dynamic Workflows give you parallel subagents and dynamic orchestration. They don't give you deterministic step execution, replayable audit trails per step, or idempotency keys with an atomic reservation. nano-vm-mcp closes exactly that gap.
 
 ```
 Claude Code          ← decides what to do
@@ -212,12 +214,12 @@ Traces persist across sessions in SQLite WAL. `trace_id` is UUID4-stable for OTe
 
 ---
 
-## Idempotency — Inter-session Re-execution Safety
+## Idempotency — Duplicate-call Protection
 
-Pass `idempotency_key` to `run_program` to guarantee that a program executes at most once per key, even across process restarts:
+Pass `idempotency_key` to `run_program` to avoid running the same program twice for the same key:
 
 ```python
-# First call — executes normally, result cached
+# First call — reserves the key, executes, caches the result on success
 result = await session.call_tool(
     "run_program",
     {
@@ -226,7 +228,7 @@ result = await session.call_tool(
     },
 )
 
-# Second call with same key — returns cached result immediately, no re-execution
+# Second call with the same key after success — returns the cached result, no re-execution
 result = await session.call_tool(
     "run_program",
     {
@@ -236,9 +238,21 @@ result = await session.call_tool(
 )
 ```
 
-**Crash recovery:** if the process crashes after program start but before completion (`status=pending`), the next call with the same key overwrites the pending entry and re-executes. Once the result is written as `status=success`, it is immutable for that key.
+**How a key behaves**
 
-**Note on "exactly-once":** the FSM guarantees idempotent re-execution — the same key never triggers a second run after success. External side effects (payment capture, webhook delivery) are only as idempotent as the tools you register. This is the same contract Temporal and Cadence operate under.
+| State of the key | What a call with that key does |
+| :--- | :--- |
+| none | Reserves the key atomically, runs the program |
+| `success` | Returns the cached result; the program does not run |
+| `pending`, reservation still valid | Returns `idempotency_in_flight`; the program does not run |
+| `pending`, reservation expired | Takes over the key and runs the program |
+| `failed` (error, exception, cancellation) | Takes over the key and runs the program |
+
+**`idempotency_in_flight`** is an ordinary result payload with an `error` key (`{"error": "idempotency_in_flight", "idempotency_key": ..., "detail": ...}`), not an MCP exception. The gateway does not wait for the other request. Clients must check for `error` in the response and retry later: after success the same key returns the cached result.
+
+**Reservation lease.** A `pending` reservation is valid for `IDEMPOTENCY_PENDING_LEASE_SECONDS` (3600 seconds, a constant in `nano_vm_mcp/handlers.py`). Consequences: a program that runs longer than the lease can be started a second time by a concurrent call; a process that dies mid-run blocks retries of that key until the lease expires.
+
+**This is not exactly-once.** A process that crashes after a tool has produced its external effect (payment capture, webhook delivery) but before the result is written as `success` will be re-run after the lease expires. External side effects are only as idempotent as the tools you register.
 
 ---
 
@@ -365,9 +379,19 @@ Neither gate can be bypassed by LLM output.
 
 ### SSE transport and auth
 
-Set `NANO_VM_MCP_API_KEY` to enable bearer token authentication (`secrets.compare_digest` — timing-safe). If unset, a warning is logged and all requests are allowed — suitable for localhost only.
+| Transport | Authentication |
+| :--- | :--- |
+| `stdio` | None needed: local process, no network peer |
+| `sse` (and any other network transport) | Required: set `NANO_VM_MCP_API_KEY`, or opt out explicitly with `NANO_VM_MCP_ALLOW_NOAUTH=1` |
 
-**Do not expose the SSE endpoint to the public internet without `NANO_VM_MCP_API_KEY` set.**
+- Every transport except `stdio` is treated as a network transport. Any transport added in the future goes through the same check.
+- With no key and no opt-out the server exits at start-up (exit code 2) and tells you which variable to set. An empty or whitespace-only `NANO_VM_MCP_API_KEY` counts as unset.
+- `NANO_VM_MCP_ALLOW_NOAUTH=1` (exactly `1`) starts the server with no authentication and logs a warning. Use it only on localhost or a trusted network. If a key is also set, the key wins.
+- With a key, every request to `/sse` and `/messages` must carry `Authorization: Bearer <key>`; the comparison is timing-safe. `/health` is always public.
+
+**Single-tenant.** There is one shared key and no notion of an owner or principal: whoever holds the key can read and delete every program, trace and session. Do not expose one instance to several independent clients. Per-client ownership is not implemented.
+
+**Upgrading to 0.5.0.** An SSE deployment that ran without `NANO_VM_MCP_API_KEY` no longer starts. Set the key, or set `NANO_VM_MCP_ALLOW_NOAUTH=1` to keep the old behaviour.
 
 ---
 
@@ -378,7 +402,8 @@ Set `NANO_VM_MCP_API_KEY` to enable bearer token authentication (`secrets.compar
 | `NANO_VM_MCP_DB` | `nano_vm_mcp.db` | SQLite WAL database path |
 | `NANO_VM_MCP_HOST` | `0.0.0.0` | SSE bind host |
 | `NANO_VM_MCP_PORT` | `8080` | SSE bind port |
-| `NANO_VM_MCP_API_KEY` | _(unset)_ | Bearer token for SSE auth |
+| `NANO_VM_MCP_API_KEY` | _(unset)_ | Bearer token; required for `sse` unless `NANO_VM_MCP_ALLOW_NOAUTH=1` |
+| `NANO_VM_MCP_ALLOW_NOAUTH` | _(unset)_ | `1` allows a network transport to start without a key (warning logged) |
 | `NANO_VM_MCP_LLM_MODEL` | _(unset)_ | LiteLLM model string for `llm` steps |
 
 ---

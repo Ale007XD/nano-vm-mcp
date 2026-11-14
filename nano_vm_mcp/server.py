@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import secrets
 from typing import Any
 
 from mcp.server import NotificationOptions, Server
@@ -14,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from .auth import AuthPolicy
 from .handlers import build_chain
 from .store import ProgramStore
 
@@ -33,16 +33,25 @@ _chain = build_chain()
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
-    """Reject SSE requests without a valid Bearer token when API key is configured."""
+    """Bearer-token gate for network transports, built only from an ``AuthPolicy``.
+
+    The middleware never reads the environment: the policy is resolved once at
+    start-up (``auth.resolve_auth_policy``). Constructing it without a policy is
+    a TypeError, and a ``none`` policy (stdio) has no middleware at all.
+    """
+
+    def __init__(self, app: Any, *, policy: AuthPolicy) -> None:
+        if not isinstance(policy, AuthPolicy):
+            raise TypeError("BearerAuthMiddleware requires an AuthPolicy")
+        if policy.mode == "none":
+            raise ValueError("a 'none' auth policy (stdio) must not be wrapped in middleware")
+        super().__init__(app)
+        self._policy = policy
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
-        api_key = os.getenv("NANO_VM_MCP_API_KEY", "")
-        if not api_key:
+        if self._policy.mode == "noauth":
             return await call_next(request)
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer ") or not secrets.compare_digest(
-            auth[len("Bearer ") :].strip(), api_key
-        ):
+        if not self._policy.verify(request.headers.get("Authorization", "")):
             logger.warning(
                 "auth_failed method=%s path=%s client=%s",
                 request.method,
@@ -205,9 +214,10 @@ def run_stdio() -> None:
     asyncio.run(_main())
 
 
-def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
-    """Start server in SSE/HTTP mode (VPS, remote MCP clients)."""
-    import uvicorn
+def build_sse_app(policy: AuthPolicy) -> Any:
+    """Build the SSE/HTTP ASGI app; every protected route sits behind ``policy``."""
+    if policy.mode == "none":
+        raise ValueError("SSE is a network transport: a 'none' auth policy is not allowed")
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
@@ -239,14 +249,20 @@ def run_sse(host: str = "0.0.0.0", port: int = 8080) -> None:
             Route("/sse", endpoint=handle_sse),
             Mount("/messages", app=sse.handle_post_message),
         ],
-        middleware=[Middleware(BearerAuthMiddleware)],
+        middleware=[Middleware(BearerAuthMiddleware, policy=policy)],
     )
 
     # Top-level app: /health is public, all other paths go to protected sub-app.
-    starlette_app = Starlette(
+    return Starlette(
         routes=[
             Route("/health", endpoint=health),
             Mount("/", app=protected),
         ],
     )
-    uvicorn.run(starlette_app, host=host, port=port)
+
+
+def run_sse(policy: AuthPolicy, host: str = "0.0.0.0", port: int = 8080) -> None:
+    """Start server in SSE/HTTP mode (VPS, remote MCP clients)."""
+    import uvicorn
+
+    uvicorn.run(build_sse_app(policy), host=host, port=port)

@@ -23,6 +23,7 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 import nano_vm_mcp.tools as _tools_module
+from nano_vm_mcp.auth import AuthConfigError, AuthPolicy, resolve_auth_policy
 from nano_vm_mcp.handlers import GovernedRunProgramHandler
 from nano_vm_mcp.server import BearerAuthMiddleware
 from nano_vm_mcp.store import ProgramStore
@@ -197,25 +198,31 @@ def test_cl03_two_workers_resume_same_trace_executes_once(tmp_path):
 # ───────────────────────── G-23 · auth ─────────────────────────
 
 
-def _app() -> Starlette:
+def _app(policy: AuthPolicy) -> Starlette:
     async def stub(request):
         return JSONResponse({"ok": True})
 
     return Starlette(
-        routes=[Route("/sse", endpoint=stub)], middleware=[Middleware(BearerAuthMiddleware)]
+        routes=[Route("/sse", endpoint=stub)],
+        middleware=[Middleware(BearerAuthMiddleware, policy=policy)],
     )
 
 
-def test_au01_no_api_key_means_no_auth_characterization(monkeypatch):
-    """AU-01 [G-23, CH]: без NANO_VM_MCP_API_KEY middleware пропускает любой запрос (fail-open).
-    Меняется осознанно, если сервер перейдёт на fail-closed."""
-    monkeypatch.delenv("NANO_VM_MCP_API_KEY", raising=False)
-    assert TestClient(_app()).get("/sse").status_code == 200
+def test_au01_no_key_network_start_is_refused():
+    """AU-01 [G-23], REVISED 2026-11 (fail-closed, 0.5.0): раньше закрепляло fail-open
+    (без NANO_VM_MCP_API_KEY middleware пропускал всё). Теперь сетевой транспорт без ключа и
+    без NANO_VM_MCP_ALLOW_NOAUTH=1 не стартует; открытый режим только явный (noauth)."""
+    import pytest
+
+    with pytest.raises(AuthConfigError):
+        resolve_auth_policy("sse", {})
+    noauth = resolve_auth_policy("sse", {"NANO_VM_MCP_ALLOW_NOAUTH": "1"})
+    assert TestClient(_app(noauth)).get("/sse").status_code == 200
 
 
-def test_au02_api_key_set_requires_bearer_characterization(monkeypatch):
-    """AU-02 [G-23, CH]: с ключом без заголовка → 401, с верным Bearer → 200."""
-    monkeypatch.setenv("NANO_VM_MCP_API_KEY", "k")
-    c = TestClient(_app())
+def test_au02_api_key_set_requires_bearer_characterization():
+    """AU-02 [G-23, CH]: с ключом без заголовка → 401, с верным Bearer → 200.
+    (Семантика не менялась; только способ построения: политика вместо чтения env.)"""
+    c = TestClient(_app(resolve_auth_policy("sse", {"NANO_VM_MCP_API_KEY": "k"})))
     assert c.get("/sse").status_code == 401
     assert c.get("/sse", headers={"Authorization": "Bearer k"}).status_code == 200

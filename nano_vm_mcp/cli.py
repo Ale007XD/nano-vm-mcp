@@ -5,19 +5,26 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
+from .auth import TRANSPORTS, AuthConfigError, resolve_auth_policy
 
-def main() -> None:
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="nano-vm-mcp",
         description="MCP server for llm-nano-vm",
     )
     parser.add_argument(
         "--transport",
-        choices=["stdio", "sse"],
+        choices=list(TRANSPORTS),
         default="stdio",
-        help="Transport mode: stdio (default, for Claude Desktop) or sse (HTTP, for VPS).",
+        help=(
+            "Transport mode: stdio (default, local, for Claude Desktop) or sse (HTTP, for VPS). "
+            "Every transport except stdio requires NANO_VM_MCP_API_KEY "
+            "(or NANO_VM_MCP_ALLOW_NOAUTH=1)."
+        ),
     )
     parser.add_argument(
         "--host",
@@ -40,8 +47,11 @@ def main() -> None:
         default=".env",
         help="Path to .env file (default: .env).",
     )
+    return parser
 
-    args = parser.parse_args()
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
 
     # Load .env before importing server (server reads env at module level)
     env_path = Path(args.env_file)
@@ -50,26 +60,25 @@ def main() -> None:
 
         load_dotenv(env_path)
 
+    # Single auth decision point: before any transport branch and before the server
+    # module is imported (importing it opens the SQLite database).
+    try:
+        policy = resolve_auth_policy(args.transport, os.environ)
+    except AuthConfigError as exc:
+        print(f"\n  nano-vm-mcp: refusing to start.\n  {exc}\n", file=sys.stderr)
+        raise SystemExit(2) from None
+
     os.environ.setdefault("NANO_VM_MCP_DB", args.db)
 
     from .server import run_sse, run_stdio
 
     if args.transport == "stdio":
         run_stdio()
-    else:
-        _api_key = os.getenv("NANO_VM_MCP_API_KEY", "")
-        if not _api_key:
-            print(
-                "\n"
-                "  ⚠️  WARNING: NANO_VM_MCP_API_KEY is not set.\n"
-                "     The SSE endpoint has NO authentication.\n"
-                "     Anyone who knows the URL can call run_program on this server.\n"
-                "\n"
-                "     Set NANO_VM_MCP_API_KEY in your .env or environment before\n"
-                "     exposing this server outside localhost or a trusted network.\n",
-                file=sys.stderr,
-            )
-        run_sse(host=args.host, port=args.port)
+    elif args.transport == "sse":
+        run_sse(policy, host=args.host, port=args.port)
+    else:  # a transport added to TRANSPORTS without a runner must not start unauthenticated
+        print(f"nano-vm-mcp: no runner for transport '{args.transport}'", file=sys.stderr)
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

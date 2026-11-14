@@ -8,6 +8,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### Breaking
+- **Network transports now fail closed (G-23).** `--transport sse` (and any network
+  transport added later) refuses to start, with exit code 2, unless
+  `NANO_VM_MCP_API_KEY` is a non-empty token or `NANO_VM_MCP_ALLOW_NOAUTH=1` is set.
+  An empty or whitespace-only key counts as unset. `stdio` is exempt. The opt-out
+  starts the server without authentication and logs a warning; a key, when present,
+  takes precedence. Deployments that ran SSE with no key must set one or set
+  `NANO_VM_MCP_ALLOW_NOAUTH=1`.
+- `BearerAuthMiddleware` is built from an `AuthPolicy` (`nano_vm_mcp.auth`) and no longer
+  reads the environment; constructing it without a policy raises `TypeError`.
+  `server.run_sse()` now takes the policy as its first argument (`run_sse(policy, host, port)`).
+
+### Added
+- `nano_vm_mcp.auth`: `AuthPolicy`, `resolve_auth_policy()`, `TRANSPORTS`,
+  `LOCAL_TRANSPORTS`. The policy is resolved once, in `cli.main()`, before the server
+  module (and its SQLite database) is imported. The CLI `--transport` choices come from
+  `TRANSPORTS`.
+- `server.build_sse_app(policy)`.
+- `idempotency_in_flight` result for `run_program` when another request holds a live
+  reservation of the same `idempotency_key` (an ordinary payload with an `error` key,
+  not an MCP exception).
+
+### Fixed
+- A Bearer token containing non-ASCII characters returned HTTP 500 (`TypeError` from
+  `secrets.compare_digest`); it is now a 401.
+- **`idempotency_key` reservation is atomic (G-30).** A `pending` key reserves the key:
+  a concurrent request no longer runs the program a second time. Errors, exceptions and
+  cancellation release the key (`failed`, retryable); a reservation older than
+  `IDEMPOTENCY_PENDING_LEASE_SECONDS` (3600 s) can be taken over; `get_idempotency_key`
+  hides expired entries. This is not exactly-once: a crash after tool effects and before
+  the result is stored is re-run after the lease expires.
+- **Resume is claimed atomically (G-29).** `SQLiteCursorRepository.delete()` returns
+  whether the cursor was deleted, so with `llm-nano-vm>=0.8.13` two concurrent
+  resumes of one trace run the step once; the loser gets `ResumeError`.
+
+### Changed
+- Requires `llm-nano-vm>=0.8.13,<0.9`.
+- README: removed the "exactly-once" wording; documented `idempotency_in_flight`, the
+  lease, authentication per transport, and the single-tenant model.
+
 ---
 
 ## [0.4.7] - 2026-11-03
