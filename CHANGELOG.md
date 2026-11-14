@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+---
+
+## [0.5.0] - 2026-11-14
+
 ### Breaking
 - **Network transports now fail closed (G-23).** `--transport sse` (and any network
   transport added later) refuses to start, with exit code 2, unless
