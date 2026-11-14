@@ -94,3 +94,41 @@ jobs:
         with:
           password: ${{ secrets.PROD_PYPI_API_TOKEN }}
           skip-existing: true
+
+  github-release:
+    name: GitHub Release 🏷️
+    needs: [build, publish-pypi]
+    if: needs.build.outputs.is_rc == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create GitHub Release from the tag
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, nothing to do"
+            exit 0
+          fi
+          VERSION="${TAG#v}"
+          # Notes = the CHANGELOG section "## [VERSION] ..." (without the trailing --- rule)
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { f = 1; next }
+            /^## \[/ { f = 0 }
+            f && $0 != "---"
+          ' CHANGELOG.md > notes.md
+          if grep -q '[^[:space:]]' notes.md; then
+            gh release create "$TAG" --title "nano-vm-mcp $VERSION" \
+              --notes-file notes.md --verify-tag
+          else
+            echo "::warning::No CHANGELOG section for $VERSION; using generated notes"
+            gh release create "$TAG" --title "nano-vm-mcp $VERSION" \
+              --generate-notes --verify-tag
+          fi
